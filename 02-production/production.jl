@@ -4,108 +4,17 @@
 using Markdown
 using InteractiveUtils
 
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : missing
+        el
+    end
+end
+
 # ╔═╡ d315f0e2-5754-11eb-2240-dd868564adfb
 using Revise;
-
-# ╔═╡ b63e580c-56b8-11eb-254c-b92db2e58e72
-using ModelingToolkit;
-
-# ╔═╡ 865062b4-56bf-11eb-13a4-292920055e10
-"""
-	module SolveMTK
-
-Function to symbolically solve some equations defined by ModelingToolkit.
-"""
-module SolveMTK
-
-using ModelingToolkit
-
-vars(x::Sym) = Set([x])
-vars(x::Number) = Set()
-vars(t::Term) = union(vars.(ModelingToolkit.arguments(t))...)
-vars(e::Equation) = union(vars(e.lhs), vars(e.rhs))
-
-"""
-	solve(eq, x; maxdepth=20)
-
-Tries to solve the `eq` for `x`. 
-
-# Arguments 
-- `eq` should be a ModelingToolkit.Equation with fields `eq.lhs` and `eq.rhs`. 
-- `x` should appear in `eq` and be a created by ModelingToolkit.@variables or @parameters
-
-# Returns
-An equation that should have `x` as the lhs variable and the solution as the rhs.
-
-# Limitations
-`eq` must only invole `+`, `-`, `*`, `/`, and `^` operations. Within non-commutative operations, `x` should only appear in one argument of the operation.
-
-# Extending
-To extend `solve` to work with additional operations, the `inverteq` must be defined for the additional operations. 
-"""
-function solve(eq, x; maxdepth=20)
-	# ensure x is only on lhs
-	if x ∈ vars(eq.rhs)
-		eq = simplify(eq.lhs - eq.rhs ~ 0, polynorm=true)
-	end
-	
-	i = 0
-	while (eq.lhs isa ModelingToolkit.Term) && i <= maxdepth
-	#for i in 1:1
-		eq = move_op_right(eq, x)
-		i += 1
-	#end
-	end
-	eq = simplify(eq, polynorm=true)
-	return(eq)	
-end
-
-function move_op_right(eq,x)
-	op = ModelingToolkit.operation(eq.lhs)
-	args = ModelingToolkit.arguments(eq.lhs)
-	return(move_op_right(x, args, op, eq.rhs))
-end
-
-"""
-	inverteq(op, xa, r, a, xfirst)
-
-Converts an equation of the form `xa op a ~ r` to one with `xa ~ f(a, r)`. 
-
-If `xfirst==false`, it assumes the original equation is `a op xa ~ r` instead.
-"""
-inverteq(op::typeof(+), xa, r, a, xfirst) = xa ~ r - a
-inverteq(op::typeof(*), xa, r, a, xfirst) = xa ~ r/a
-inverteq(op::typeof(-), xa, r, a, xfirst) = 
-	xfirst ? x ~ r + a : x ~ a - r
-inverteq(op::typeof(/), xa, r, a, xfirst) =
-	xfirst ? (xa ~ r*a) : (xa ~ a/r)
-inverteq(op::typeof(^), xa, r, a, xfirst) = 
-	xfirst ? (xa ~ r^(1/a)) : (xa ~ log(r)/log(a))
-
-function move_op_right(x, args, op::Commutes, rhs) where Commutes <: Union{typeof(+), typeof(*)}
-	xin = (x .∈ vars.(args))	
-	xa = reduce(op, args[xin])
-	a = reduce(op, args[.!xin])
-	eq = inverteq(op, xa, rhs, a, true)
-	return(eq)
-end
-
-function move_op_right(x, args, op, rhs)
-	length(args)==2 || error("Only 2 args allowed for noncommutative op")
-	eq = if x ∈ vars(args[1]) && !(x ∈ vars(args[2]))
-		inverteq(op, args[1], rhs, args[2], true)
-	elseif x ∈ vars(args[2]) && !(x ∈ vars(args[1]))
-		inverteq(op, args[2], rhs, args[1], false)
-	else
-		println("-----------------------------")
-		println(args)
-		println(op)
-		error("x in wrong places")
-	end
-	return(eq)
-end
-
-end
 
 # ╔═╡ 41769c24-567b-11eb-2f2d-9b51f92e7947
 module Production
@@ -117,28 +26,40 @@ struct Params{T}
 	βk::T
 	ρ::T
 	σϵ::T
-	ση::T
+	σξ::T
 end
 
 function simulate(p::Params{R}, N, T; 
-		wage=ones(N,T), price=ones(N,T), rent=ones(N,T)) where R
+		wage=ones(N,T), price=ones(N,T), rent=ones(N,T),
+		pricesknown=true, inertia = 0.0) where R
 	y = Matrix{R}(undef, N, T)
 	l = Matrix{R}(undef, N, T)
 	k = Matrix{R}(undef, N, T)
 	ϵ = rand(Normal(0, p.σϵ), N, T)
-	η = rand(Normal(0, p.ση), N, T)
+	ξ = rand(Normal(0, p.σξ), N, T)
 	ω = OffsetArray(Matrix{R}(undef, N, T+1), 1:N,0:T)
-	ω[:,0] .= rand(Normal(0, p.ση/(1-p.ρ)), N)
+	ω[:,0] .= rand(Normal(0, p.σξ/(1-p.ρ)), N)
 	for t in 1:T		
-		ω[:,t] .= ω[:,t-1]*p.ρ + η[:,t]
+		ω[:,t] .= ω[:,t-1]*p.ρ + ξ[:,t]
 		# capital chosen at t-1 with rental price rent[i,t] and no adjustment cost 
-		k[:,t] .= (1-p.βl)/(1-p.βk-p.βl)*(
-			1/(1-p.βl)*log.(price[:,t]./(rent[:,t].*wage[:,t].^p.βl) 
-					*mean(LogNormal(0,p.σϵ))) .+
+		kopt = (1-p.βl)/(1-p.βk-p.βl)*(
+			1/(1-p.βl)*
+			(pricesknown ?  # prices known in advance,
+				log.(price[:,t]./(rent[:,t].*wage[:,t].^p.βl) 
+					*mean(LogNormal(0,p.σϵ))) 
+				: # prices not known in advance, so take the mean
+				log.(mean(price./(rent.*wage.^p.βl)) 
+							*mean(LogNormal(0,p.σϵ)))	
+			) .+	
 			log(p.βl^(p.βl/(1-p.βl)) - p.βl^(1/(1-p.βl))) .+
 			log(p.βk/(1-p.βl)) .+
-			log.(mean.(LogNormal.(p.ρ*ω[:,t-1]/(1-p.βl), p.ση/(1-p.βl))))
+			log.(mean.(LogNormal.(p.ρ*ω[:,t-1]/(1-p.βl), p.σξ/(1-p.βl))))
 			)
+		if t==1 
+			k[:,t] .= kopt
+		else
+			k[:,t] .= (1-inertia)*kopt .+ inertia*k[:,t-1]
+		end
 		
 		l[:,t] .= 1/(1-p.βl)*(log(p.βl*mean(LogNormal(0,p.σϵ))) .+
 				log.(price[:,t]./wage[:,t]) .+ p.βk*k[:,t] .+ ω[:,t])			
@@ -151,8 +72,10 @@ end
 end
 		
 
+# ╔═╡ 0437683c-5837-11eb-1f1c-33755302a653
+using PlutoUI
+
 # ╔═╡ 3c80dbde-568b-11eb-18ae-17ec1bb0cc92
-#using AbstractPlotting, WGLMakie
 using Plots, StatsPlots
 
 # ╔═╡ b7e414a2-5687-11eb-1a72-073c31266c02
@@ -160,9 +83,6 @@ using DataFrames, GLM
 
 # ╔═╡ c1c9492c-5689-11eb-2bed-2933c00e9c17
 using FixedEffectModels
-
-# ╔═╡ a6a60cb6-569d-11eb-22d8-61373838c6b2
-html"<button onclick='present()'>present</button>"
 
 # ╔═╡ fa80b794-569d-11eb-2f16-0dad9fa54602
 md"""
@@ -177,7 +97,9 @@ Paul Schrimpf
 
 # ╔═╡ 7d3e92a0-569d-11eb-3d2b-bdbfb6b4b364
 md"""
-In this notebook we will similate some realistic production function data, and use the simulated data to investigate the performance of various estimators.
+In this notebook we will similate some production function data, and use the simulated data to investigate the performance of various estimators. 
+
+This notebook is meant to accompany [these slides](https://faculty.arts.ubc.ca/pschrimpf/565/02-1-production-methods.pdf), and the notation used should be similar.
 
 ## Model
 
@@ -209,29 +131,15 @@ or with labor and capital in logs,
 ```
 """
 
-# ╔═╡ 2dd656c6-56d2-11eb-1e1d-d3636d80d71a
-md"""
-### Digression: Using Julia as a CAS
-
-We can check our calculation of labor using a computer algebra system (CAS). Probably the most popular CAS is Mathematica / Wolfram Alpha. We can accomplish something similar in Julia using the [ModelingToolkit.jl](https://github.com/SciML/ModelingToolkit.jl) package. The focus of this package is on conveniently converting from the sort of symbolic math that we would write in papers to fast numeric code that can be used with numeric solvers. Consequently, the package does not yet have convenient interface for solving equations symbolically.
-
-However, a small extension allows it to solve some simple equations symbolically. The `module SolveMTK` contains functions that try to solve equations symbolically. Don't worry too much about the code inside `module SolveMTK`; it is fairly advanced.
-"""
-
-# ╔═╡ 5cc072ac-56d3-11eb-18b8-7f3238cdbec7
-md"""
-The code cell below uses ModelingToolkit to symbolically define the firm's profit function. It then symbolically computes the first order condition, and solves for L. Hopefully the output is the same as what is written above.
-"""
-
 # ╔═╡ 68f6e53e-56d4-11eb-3575-05ee3be38745
 md"""
 ### Capital
 
-We will assume that $K_{it}$ is chosen in advance at time $t-1$. There are no adjustment costs or other frictions in the choice of capital. We will assume that the firm rents capital at rental rate $r$. If prices ($p$, $w$, and $r$) evolve over time, we assume that firms have perfect foresight over them. Thus, the only uncertainty at time $t-1$ about time $t$ is about $\epsilon_{it}$ and $\omega_{it}$.
+We will assume that $K_{it}$ is chosen in advance at time $t-1$. There are no adjustment costs or other frictions in the choice of capital. We will assume that the firm rents capital at rental rate $r$. Firms can either know prices perfectly, or they assume prices evolve independently of $\epsilon$ and $\omega$. 
 
 We also assume that $\omega$, follows an AR(1) process:
 ```math
-\omega_{it} = \rho \omega_{it-1} + \eta_{it}
+\omega_{it} = \rho \omega_{it-1} + \xi_{it}
 ```
 
 The firm's choice of capital maximizes expected profits:
@@ -250,13 +158,19 @@ and simplifying,
 
 taking the first order condition, and solving for $K$ gives:
 ```math
-K(\omega_{it-1}, p, w, r) = 
+K^\ast(\omega_{it-1}, p, w, r) = 
 \left( \frac{p}{r w^{\beta_\ell}} E[e^\epsilon] \right)^{1/(1-\beta_k-\beta_\ell)}
 \left[\frac{\beta_k}{1-\beta_\ell}\left( \beta_\ell^{\beta_\ell/(1-\beta_\ell)} - \beta_\ell^{1/(1-\beta_\ell)}\right) \right]^{(1-\beta_\ell)/(1-\beta_k - \beta_\ell)} 
 E[e^{\omega_{it} \frac{1}{1- \beta_k - \beta_\ell}} | \omega_{it-1}]
 ```
 
 Note that we need to have $\beta_k + \beta_\ell < 1$ for this to be the correct solution. Without any adjustment frictions, decreasing returns to scale are required for the optimal choice of capital to be finite.
+
+
+For some combinations of estimators and other simulation settings, the frictionless choice of $K^\ast$ will cause identification problems. Therefore, we also consider a value of $k_t$ with inertia given by:
+```math
+k_{it} = (1 - \mathtt{inertia}) \log K^\ast + \mathtt{inertia} k_{it-1}
+```
 """
 
 
@@ -270,10 +184,10 @@ The code below simulates the model. We assume that $\epsilon$ and $\eta$ are nor
 """
 
 # ╔═╡ 8d1cfa5c-56a7-11eb-339e-3d733e6041ce
-N, T = 200, 10
+N, T = 1000, 20
 
 # ╔═╡ a16f916a-5687-11eb-0219-7b16fa743194
-p = Production.Params(0.3, 0.6, 0.8, 1.0, 0.2)
+p = Production.Params(0.6, 0.3, 0.7, 0.1, 0.1)
 
 # ╔═╡ b5eeabfe-56dd-11eb-0292-43f1e2166311
 md""" 
@@ -289,22 +203,25 @@ If there is no variation in prices, $k_{it+1}$ and $\ell_{it}$ are perfectly col
 wage = rand(N,T) .+ 0.5;
 
 # ╔═╡ d7d9043e-56b4-11eb-05af-1f838362a37d
-#rent = ones(N,T); 
-rent = rand(N,T) .+ 0.5;
+rent = ones(N,T);
+#rent = rand(N,T) .+ 0.5;
+
+# ╔═╡ b308ed34-5837-11eb-1232-c98859ce360f
+
+
+# ╔═╡ 2d7f4818-5837-11eb-3679-dfaad86cd792
+md"""
+> We can also create html elements that modify Julia variables. 
+
+Inertia: 0
+$(@bind inertia Slider(range(0.,1., step=0.01))) 1 
+
+Prices known: $(@bind pricesknown CheckBox())
+"""
 
 # ╔═╡ b821a380-5687-11eb-0f31-89930c22a2ff
-y, l, k, ω = Production.simulate(p, N, T, wage=wage, rent=rent);
-
-# ╔═╡ 3eaaf80e-56b8-11eb-1f22-a380fc7122e9
-let 
-	@parameters βl, βk, ω, Ee, p, w # Ee is E[exp(ϵ)], others should be 
-	 								# self-explanatory
-	@variables L, K
-	@derivatives Dl'~L
-	profits = p*Ee*exp(ω)*L^βl*K^βk - w*L
-	focL = ModelingToolkit.expand_derivatives(Dl(profits)) ~ 0
-	SolveMTK.solve(focL,L)	
-end
+y, l, k, ω = Production.simulate(p, N, T, wage=wage, rent=rent, 
+								 pricesknown=pricesknown, inertia = inertia);
 
 # ╔═╡ 0482c232-56ad-11eb-3e62-d5482fd641e1
 Plots.gr(fmt="png") # need a bitmap format when plotting thousands of points or your browser will not be happy
@@ -337,7 +254,7 @@ df = let
 				 ω=vec(ω[:,1:T]), w=vec(wage), r=vec(rent))
 	sort!(df, [:id, :t])
 	df[!,:klag] = panellag(:k, df, :id, :t, 1)
-	df[!,:invest] = df[!,:k] - df[!,:klag]
+	df[!,:invest] = df[!,:k] - panellag(:k, df, :id, :t, -1)
 	df	
 end;
 
@@ -378,11 +295,6 @@ Since this data is simulated with firms taking prices as given, if there is vari
 reg(df, @formula(y ~ (k + l ~ r + w) + t), Vcov.cluster(:id, :t))
 # including t in the formula shouldn't be needed, but there's an error when there's no exogenous variables...
 
-# ╔═╡ 1979e336-56e0-11eb-3f7e-dfb33e4ca1fe
-md"""
-## Dynamic Panel
-"""
-
 # ╔═╡ 21c66388-56e0-11eb-2e3c-618a1d2c0362
 md"""
 ## Olley-Pakes
@@ -392,6 +304,10 @@ md"""
 module Estimators
 
 import Dialysis 
+import Dialysis.panellag
+import Optim
+
+nomissing(x::Array{Union{Missing, T},D}) where T where D= Array{T,D}(x) 
 
 function olleypakes(df, output, flexibleinputs, fixedinputs, controlvars, id, t;
 	step1degree=4, step2degree=4)
@@ -399,58 +315,74 @@ function olleypakes(df, output, flexibleinputs, fixedinputs, controlvars, id, t;
 	step1, eyex = Dialysis.partiallinear(output, flexibleinputs, controlvars, df, 
 		npregress=(xp, xd, yd)->Dialysis.polyreg(xp,xd,yd, degree=step1degree), 
 		clustervar=id)
-	βflex = step1.coef[2:end]
-	Vflex = step1.vcov[2:end,2:end]
+	βl = step1.coef[2:end]
+	Vl = step1.vcov[2:end,2:end]
 	
 	# step 2
-	dc=copy(df[!,[output, flexibleinputs..., fixedinputs..., controlvars..., id, t]])
-	dc[!,:ỹ] = dc[!,output] - Matrix(dc[!,flexibleinputs])*βflex	
-	dc[!,:f] = eyex[:,1]
-	function nlobj(β; dc=dc)
-		obj = zero(eltype(β))
-		for r in eachrow(dc) 
-			
-		dc[!,:ω̂] = dc[!,:f] .- Matrix(dc[!,:fixedinputs])*βk
-		dc[!,:
-		g = Dialysis.polyreg(
-		return nothing	
+	f̂ = eyex[:,1]
+	nlobj = let
+		df = sort!(df, [id, t])
+		# the let block here is for performance, see https://docs.julialang.org/en/v1/manual/performance-tips/#man-performance-captured
+		f̂lag = panellag(f̂, df[!,id], df[!,t])
+		klag = panellag(Matrix(df[!,fixedinputs]), df[!,id], df[!,t])
+		inc = vec(all(.!ismissing.(f̂lag) .& .!ismissing.(klag), dims=2))
+		println(length(inc))
+		f̂lag = nomissing(f̂lag[inc]) # ensures type of elements is not a Union{Missing, T}, but just T
+		klag = nomissing(klag[inc,:])
+		y=df[inc,output]		
+		k=Matrix(df[inc,fixedinputs])	
+		l=Matrix(df[inc,flexibleinputs])
+		function nlobj(βk; degree=step2degree)
+			ω̂lag = reshape(f̂lag .- klag*βk, length(f̂lag), 1)
+			ỹ = reshape(y - l*βl - k*βk, length(y), 1)
+			g = Dialysis.polyreg(ω̂lag, ω̂lag, ỹ, degree=degree)
+			ξplusϵ = ỹ - g
+			return(sum(ξplusϵ.^2)/length(ξplusϵ))
+		end
 	end
-	
-	return(step1, eyex)	
+	β0 = fill((1-sum(βl)/(length(fixedinputs)+2)),
+		length(fixedinputs))
+	step2 = Optim.optimize(nlobj, β0, Optim.NewtonTrustRegion(), autodiff=:forward)	
+	return(step1, step2, nlobj)	
 end
 
 end
 
 # ╔═╡ 2ae11fa8-5797-11eb-0232-f3e685dfc51c
+step1, step2, obj = Estimators.olleypakes(df, :y, [:l], [:k], [:invest, :k], :id, :t, step1degree=1, step2degree=1)
 
+# ╔═╡ 4765b3e4-582a-11eb-30f2-2b94983e172a
+p
 
 # ╔═╡ f15e4ee8-5757-11eb-1485-25a2bad8ac3d
+βl, βk = step1.coef[2], step2.minimizer[1]
 
+# ╔═╡ 466ca460-5826-11eb-3894-8f3cfce8f4c8
+plot(β->obj([β]), 0, 1, legend=:none, xlabel="βₖ", ylabel="MSE")
 
-# ╔═╡ ef937930-5750-11eb-2511-5d7d033d6854
-step1, eyex=Estimators.olleypakes(df, :y, [:l], [:k], [:klag, :invest], :id, :t)
+# ╔═╡ 447914e0-5838-11eb-15f2-935c6721315f
+md"""
 
-# ╔═╡ bfc0c600-5754-11eb-2560-9701e3c85f02
-eyex
+!!! question
+    What combinations of data generating processes and estimators produce good 
+    estimates? Explain why.
+"""
 
 # ╔═╡ Cell order:
-# ╟─a6a60cb6-569d-11eb-22d8-61373838c6b2
 # ╟─fa80b794-569d-11eb-2f16-0dad9fa54602
 # ╠═d315f0e2-5754-11eb-2240-dd868564adfb
 # ╟─7d3e92a0-569d-11eb-3d2b-bdbfb6b4b364
-# ╟─2dd656c6-56d2-11eb-1e1d-d3636d80d71a
-# ╠═b63e580c-56b8-11eb-254c-b92db2e58e72
-# ╟─865062b4-56bf-11eb-13a4-292920055e10
-# ╟─5cc072ac-56d3-11eb-18b8-7f3238cdbec7
-# ╠═3eaaf80e-56b8-11eb-1f22-a380fc7122e9
 # ╟─68f6e53e-56d4-11eb-3575-05ee3be38745
 # ╟─4be9eee0-56dd-11eb-3458-e3ad0d5c1a78
 # ╠═41769c24-567b-11eb-2f2d-9b51f92e7947
 # ╠═8d1cfa5c-56a7-11eb-339e-3d733e6041ce
 # ╠═a16f916a-5687-11eb-0219-7b16fa743194
+# ╠═0437683c-5837-11eb-1f1c-33755302a653
 # ╟─b5eeabfe-56dd-11eb-0292-43f1e2166311
 # ╠═da42b1c0-56b4-11eb-2a47-531922e9e6d4
 # ╠═d7d9043e-56b4-11eb-05af-1f838362a37d
+# ╠═b308ed34-5837-11eb-1232-c98859ce360f
+# ╟─2d7f4818-5837-11eb-3679-dfaad86cd792
 # ╠═b821a380-5687-11eb-0f31-89930c22a2ff
 # ╠═3c80dbde-568b-11eb-18ae-17ec1bb0cc92
 # ╠═0482c232-56ad-11eb-3e62-d5482fd641e1
@@ -467,10 +399,10 @@ eyex
 # ╠═bb829c62-5689-11eb-2bf7-6fdbde62cd01
 # ╟─3c26beb0-56e0-11eb-0973-ff465e329271
 # ╠═780a441a-56e0-11eb-1b86-3b988c8c1d07
-# ╠═1979e336-56e0-11eb-3f7e-dfb33e4ca1fe
-# ╠═21c66388-56e0-11eb-2e3c-618a1d2c0362
+# ╟─21c66388-56e0-11eb-2e3c-618a1d2c0362
 # ╠═6a2d413c-574c-11eb-39b5-cfca30ea3acc
 # ╠═2ae11fa8-5797-11eb-0232-f3e685dfc51c
+# ╠═4765b3e4-582a-11eb-30f2-2b94983e172a
 # ╠═f15e4ee8-5757-11eb-1485-25a2bad8ac3d
-# ╠═ef937930-5750-11eb-2511-5d7d033d6854
-# ╠═bfc0c600-5754-11eb-2560-9701e3c85f02
+# ╠═466ca460-5826-11eb-3894-8f3cfce8f4c8
+# ╟─447914e0-5838-11eb-15f2-935c6721315f
