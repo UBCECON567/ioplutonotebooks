@@ -1,7 +1,7 @@
 #!/bin/bash
 __usage="
 Usage: $(basename $0) [PORT]
-Note: you probably want to edit the command variable below. 
+Note: you probably want to edit the command variable below.
 
 Options:
   PORT                         Port in which to run pluto. Passed by init.
@@ -18,4 +18,4 @@ Pluto.run(
     require_secret_for_access=false,
 )"
 echo ${command}
-julia --optimize=0 -e "${command}"
+julia --project="/julia" --optimize=0 -e "${command}"
