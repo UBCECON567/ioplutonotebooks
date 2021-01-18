@@ -15,7 +15,7 @@ Pluto.run(
     port=${1},
     launch_browser=false,
     require_secret_for_open_links=false,
-    require_secret_for_access=false,
+    require_secret_for_access=false
 )"
 echo ${command}
-julia --project="/julia" --optimize=0 -e "${command}"
+julia --project="/home/jovyan" --optimize=0 -e "${command}"

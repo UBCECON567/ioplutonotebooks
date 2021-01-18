@@ -3,6 +3,8 @@
 JULIA_PROJECT="/home/jovyan"
 julia -e "import Pkg; Pkg.instantiate(); Pkg.status(); Pkg.precompile()"
 
-jupyter serverextension enable --sys-prefix jupyter_server_proxy
 jupyter labextension install @jupyterlab/server-proxy
 jupyter lab build
+jupyter lab clean
+pip install . --no-cache-dir
+rm -rf ~/.cache
