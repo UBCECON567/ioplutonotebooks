@@ -171,7 +171,9 @@ uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 
 [[Dialysis]]
 deps = ["DataFrames", "Distributions", "FixedEffectModels", "ForwardDiff", "LinearAlgebra", "RData", "ShiftedArrays", "Statistics"]
-path = "/home/paul/.julia/dev/Dialysis"
+git-tree-sha1 = "463e40cf3e72e4211508ccf729ae5e937206d115"
+repo-rev = "master"
+repo-url = "https://github.com/UBCECON567/Dialysis"
 uuid = "9b71aec8-1451-11e9-12ed-579ec60579c4"
 version = "0.1.0"
 
