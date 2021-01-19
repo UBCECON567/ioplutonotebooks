@@ -184,10 +184,10 @@ The code below simulates the model. We assume that $\epsilon$ and $\eta$ are nor
 """
 
 # ╔═╡ 8d1cfa5c-56a7-11eb-339e-3d733e6041ce
-N, T = 1000, 20
+N, T = 1000, 10
 
 # ╔═╡ a16f916a-5687-11eb-0219-7b16fa743194
-p = Production.Params(0.6, 0.3, 0.7, 0.1, 0.1)
+p = Production.Params(0.6,  0.3, 0.5, 0.1, 0.1)
 
 # ╔═╡ b5eeabfe-56dd-11eb-0292-43f1e2166311
 md""" 
@@ -308,32 +308,35 @@ import Dialysis.panellag
 import Optim
 
 nomissing(x::Array{Union{Missing, T},D}) where T where D= Array{T,D}(x) 
+nomissing(x::Array{T}) where T <: Number = x
 
 function olleypakes(df, output, flexibleinputs, fixedinputs, controlvars, id, t;
 	step1degree=4, step2degree=4)
+	df = sort!(df, [id, t])
 	# step 1
 	step1, eyex = Dialysis.partiallinear(output, flexibleinputs, controlvars, df, 
 		npregress=(xp, xd, yd)->Dialysis.polyreg(xp,xd,yd, degree=step1degree), 
 		clustervar=id)
 	βl = step1.coef[2:end]
 	Vl = step1.vcov[2:end,2:end]
-	
+	f̂ = eyex[:,1] - eyex[:,2:end]*βl 
+		#df[!,:ω] + 0.3*df[!,:k]
 	# step 2
-	f̂ = eyex[:,1]
-	nlobj = let
-		df = sort!(df, [id, t])
+	nlobj = let		
 		# the let block here is for performance, see https://docs.julialang.org/en/v1/manual/performance-tips/#man-performance-captured
 		f̂lag = panellag(f̂, df[!,id], df[!,t])
 		klag = panellag(Matrix(df[!,fixedinputs]), df[!,id], df[!,t])
-		inc = vec(all(.!ismissing.(f̂lag) .& .!ismissing.(klag), dims=2))
+		inc = vec(all(.!ismissing.(f̂lag) .& .!ismissing.(klag) .& .!ismissing.(f̂), dims=2))
 		println(length(inc))
 		f̂lag = nomissing(f̂lag[inc]) # ensures type of elements is not a Union{Missing, T}, but just T
 		klag = nomissing(klag[inc,:])
+		f̂i = nomissing(f̂[inc])
 		y=df[inc,output]		
 		k=Matrix(df[inc,fixedinputs])	
 		l=Matrix(df[inc,flexibleinputs])
 		function nlobj(βk; degree=step2degree)
-			ω̂lag = reshape(f̂lag .- klag*βk, length(f̂lag), 1)
+			ω̂lag = reshape(f̂lag .- klag*βk, length(y), 1)
+			ω̂ = reshape(f̂i - k*βk, length(y),1)
 			ỹ = reshape(y - l*βl - k*βk, length(y), 1)
 			g = Dialysis.polyreg(ω̂lag, ω̂lag, ỹ, degree=degree)
 			ξplusϵ = ỹ - g
@@ -343,13 +346,16 @@ function olleypakes(df, output, flexibleinputs, fixedinputs, controlvars, id, t;
 	β0 = fill((1-sum(βl)/(length(fixedinputs)+2)),
 		length(fixedinputs))
 	step2 = Optim.optimize(nlobj, β0, Optim.NewtonTrustRegion(), autodiff=:forward)	
-	return(step1, step2, nlobj)	
+	return(step1, step2, nlobj, eyex[:,1] - eyex[:,2:end]*βl)	
 end
 
 end
 
 # ╔═╡ 2ae11fa8-5797-11eb-0232-f3e685dfc51c
-step1, step2, obj = Estimators.olleypakes(df, :y, [:l], [:k], [:invest, :k], :id, :t, step1degree=1, step2degree=1)
+step1, step2, obj, f̂ = Estimators.olleypakes(df, :y, [:l], [:k], [:invest, :k], :id, :t, step1degree=4, step2degree=1)
+
+# ╔═╡ e798a9fe-5a67-11eb-39ee-57c252ec2400
+scatter(df[!,:ω], f̂ - df[!,:k]*p.βk, legend=:none, xlab="ω", ylab="ω̂")
 
 # ╔═╡ 4765b3e4-582a-11eb-30f2-2b94983e172a
 p
@@ -382,7 +388,7 @@ md"""
 # ╠═da42b1c0-56b4-11eb-2a47-531922e9e6d4
 # ╠═d7d9043e-56b4-11eb-05af-1f838362a37d
 # ╠═b308ed34-5837-11eb-1232-c98859ce360f
-# ╟─2d7f4818-5837-11eb-3679-dfaad86cd792
+# ╠═2d7f4818-5837-11eb-3679-dfaad86cd792
 # ╠═b821a380-5687-11eb-0f31-89930c22a2ff
 # ╠═3c80dbde-568b-11eb-18ae-17ec1bb0cc92
 # ╠═0482c232-56ad-11eb-3e62-d5482fd641e1
@@ -402,6 +408,7 @@ md"""
 # ╟─21c66388-56e0-11eb-2e3c-618a1d2c0362
 # ╠═6a2d413c-574c-11eb-39b5-cfca30ea3acc
 # ╠═2ae11fa8-5797-11eb-0232-f3e685dfc51c
+# ╠═e798a9fe-5a67-11eb-39ee-57c252ec2400
 # ╠═4765b3e4-582a-11eb-30f2-2b94983e172a
 # ╠═f15e4ee8-5757-11eb-1485-25a2bad8ac3d
 # ╠═466ca460-5826-11eb-3894-8f3cfce8f4c8
