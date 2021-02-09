@@ -95,6 +95,15 @@ Paul Schrimpf
 [Creative Commons Attribution-ShareAlike 4.0 International License](http://creativecommons.org/licenses/by-sa/4.0/)
 """
 
+# ╔═╡ 6092b5f2-5a86-11eb-2608-a10da5005ca0
+let
+	x = 10
+	y = 2
+end
+
+# ╔═╡ 86c05a7c-5a86-11eb-1b79-35c6b2a7fade
+
+
 # ╔═╡ 7d3e92a0-569d-11eb-3d2b-bdbfb6b4b364
 md"""
 In this notebook we will similate some production function data, and use the simulated data to investigate the performance of various estimators. 
@@ -345,14 +354,14 @@ function olleypakes(df, output, flexibleinputs, fixedinputs, controlvars, id, t;
 	end
 	β0 = fill((1-sum(βl)/(length(fixedinputs)+2)),
 		length(fixedinputs))
-	step2 = Optim.optimize(nlobj, β0, Optim.NewtonTrustRegion(), autodiff=:forward)	
+	step2 = Optim.optimize(nlobj, β0, Optim.LBFGS(), autodiff=:forward)	
 	return(step1, step2, nlobj, eyex[:,1] - eyex[:,2:end]*βl)	
 end
 
 end
 
 # ╔═╡ 2ae11fa8-5797-11eb-0232-f3e685dfc51c
-step1, step2, obj, f̂ = Estimators.olleypakes(df, :y, [:l], [:k], [:invest, :k], :id, :t, step1degree=4, step2degree=1)
+step1, step2, obj, f̂ = Estimators.olleypakes(df, :y, [:l], [:k], [:invest, :k], :id, :t, step1degree=4, step2degree=2)
 
 # ╔═╡ e798a9fe-5a67-11eb-39ee-57c252ec2400
 scatter(df[!,:ω], f̂ - df[!,:k]*p.βk, legend=:none, xlab="ω", ylab="ω̂")
@@ -377,6 +386,8 @@ md"""
 # ╔═╡ Cell order:
 # ╟─fa80b794-569d-11eb-2f16-0dad9fa54602
 # ╠═d315f0e2-5754-11eb-2240-dd868564adfb
+# ╠═6092b5f2-5a86-11eb-2608-a10da5005ca0
+# ╠═86c05a7c-5a86-11eb-1b79-35c6b2a7fade
 # ╟─7d3e92a0-569d-11eb-3d2b-bdbfb6b4b364
 # ╟─68f6e53e-56d4-11eb-3575-05ee3be38745
 # ╟─4be9eee0-56dd-11eb-3458-e3ad0d5c1a78
