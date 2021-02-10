@@ -106,13 +106,34 @@ md"""
 To see the source for functions in `BLPDemand.jl` or any other package, you can use the `CodeTracking` package.
 """
 
-# ╔═╡ 90dedeec-6a81-11eb-38e0-d12ed4abb84e
+# ╔═╡ 57dd3c42-6b03-11eb-26fb-bfdc7e44e4eb
+function foo(x; y=1, z = 0)
+	x + y + z
+end
 
+# ╔═╡ 84ce65aa-6b03-11eb-238c-cf8ef02eb32f
+foo(1)
+
+# ╔═╡ 83c0b2bc-6b03-11eb-3b64-7343e9da29e3
+foo(1, z=10)
 
 # ╔═╡ 65bff59c-61a6-11eb-1dfc-ff3419eb6a0b
 md"""
 The hardest part of simulating the model is solving for equilibrium prices. This is done by `eqprices` function, which uses the approach of [Morrow and Skerlos (2011)](https://doi.org/10.1287/opre.1100.0894).
 """
+
+# ╔═╡ 7c70e7e6-6b05-11eb-0f5e-a1e7116349c3
+
+
+# ╔═╡ 55b6305c-6b05-11eb-0e5c-3923457afe62
+let
+	str = @code_string share(ones(2), ones(2), ones(2,3), ones(2,3))
+	str = "```julia\n"*str*"\n```\n"
+	Markdown.parse(str)
+end
+
+# ╔═╡ 7810d8f0-6b05-11eb-38f5-0f3fc2c9af1e
+
 
 # ╔═╡ 7595f49a-674d-11eb-2b91-eba8579b0a96
 md"""
@@ -338,10 +359,15 @@ end
 # ╟─861ec9c8-6184-11eb-0d49-9b9e8573404c
 # ╟─106eab00-61a8-11eb-0396-3973ff51f91e
 # ╠═9a669df8-6179-11eb-2a04-b9229c951c5a
-# ╠═90dedeec-6a81-11eb-38e0-d12ed4abb84e
+# ╠═57dd3c42-6b03-11eb-26fb-bfdc7e44e4eb
+# ╠═84ce65aa-6b03-11eb-238c-cf8ef02eb32f
+# ╠═83c0b2bc-6b03-11eb-3b64-7343e9da29e3
 # ╠═4b319506-617b-11eb-3de0-e1f2ba8d083f
 # ╟─65bff59c-61a6-11eb-1dfc-ff3419eb6a0b
-# ╟─8b218732-61a8-11eb-1304-95b305205fc3
+# ╠═8b218732-61a8-11eb-1304-95b305205fc3
+# ╠═7c70e7e6-6b05-11eb-0f5e-a1e7116349c3
+# ╠═55b6305c-6b05-11eb-0e5c-3923457afe62
+# ╠═7810d8f0-6b05-11eb-38f5-0f3fc2c9af1e
 # ╟─7595f49a-674d-11eb-2b91-eba8579b0a96
 # ╠═80dcc2d8-61a7-11eb-2c77-efa24935d94f
 # ╠═97391104-670c-11eb-1bdd-0577f09c3a47
