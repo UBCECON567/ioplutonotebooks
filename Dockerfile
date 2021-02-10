@@ -15,11 +15,11 @@ COPY --chown=${NB_USER}:users ./setup.py ./setup.py
 COPY --chown=${NB_USER}:users ./runpluto.sh ./runpluto.sh
 
 COPY --chown=${NB_USER}:users ./notebooks ./notebooks
-COPY --chown=${NB_USER}:users ./Project.toml /julia/Project.toml
-COPY --chown=${NB_USER}:users ./Manifest.toml /julia/Manifest.toml
+COPY --chown=${NB_USER}:users ./Project.toml ./Project.toml
+COPY --chown=${NB_USER}:users ./Manifest.toml ./Manifest.toml
 RUN chown ${NB_USER} /julia
 
-ENV JULIA_PROJECT=/julia
+ENV JULIA_PROJECT=/home/jovyan
 RUN julia -e "import Pkg; Pkg.Registry.update(); Pkg.instantiate(); Pkg.status(); Pkg.precompile()"
 
 RUN jupyter labextension install @jupyterlab/server-proxy && \
