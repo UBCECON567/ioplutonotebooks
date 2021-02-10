@@ -17,7 +17,6 @@ COPY --chown=${NB_USER}:users ./runpluto.sh ./runpluto.sh
 COPY --chown=${NB_USER}:users ./notebooks ./notebooks
 COPY --chown=${NB_USER}:users ./Project.toml ./Project.toml
 COPY --chown=${NB_USER}:users ./Manifest.toml ./Manifest.toml
-RUN chown ${NB_USER} /julia
 
 ENV JULIA_PROJECT=/home/jovyan
 RUN julia -e "import Pkg; Pkg.Registry.update(); Pkg.instantiate(); Pkg.status(); Pkg.precompile()"
