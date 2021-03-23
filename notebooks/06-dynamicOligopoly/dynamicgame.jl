@@ -134,9 +134,9 @@ Returns a tuple `(out, P)` where `out` is the return value of `nlsolve`, and the
 function equilibrium(g::DynamicGame)
 	p = zeros(g.N,length(g.actions), length(g.states))
 	#p = rand(size(p)...)
-	p .= 1/length(g.actions)	
-	#p[:,1,:] .= 0.1
-	#p[:,2,:] .= 0.9
+	#p .= 1/length(g.actions)	
+	p[:,1,:] .= 0.1
+	p[:,2,:] .= 0.9
 	function probs(z)
 		p = similar(z, size(z,1), size(z,2) + 1, size(z,3))
 		ez = exp.(z)
@@ -178,8 +178,9 @@ function simulate(g::DynamicGame, T, P; burnin=T, x0=rand(g.states))
 	v = vᵖ(g, P)
 	for t=-burnin:T
 		ϵ = rand(Gumbel(0,1),g.N,length(g.actions))
-		for i in 1:g.N			
-			(_, a[i]) = findmax(v[i,:,x] + ϵ[i,:])			
+		for i in 1:g.N
+			#(_, a[i]) = findmax(v[i,:,x] + ϵ[i,:])			
+			(_, a[i]) = findmax(log.(P[i,:,x]).-log(P[i,1,x]) + ϵ[i,:])
 		end		
 		if (t>0)
 			A[:,t] .= a
@@ -194,6 +195,77 @@ function simulate(g::DynamicGame, T, P; burnin=T, x0=rand(g.states))
 		x = rand(DiscreteNonParametric(g.states, g.Ex(a,x)))
 	end
 	return(a=A, x=X, u=U, v=V, ev=EV)
+end
+
+end
+
+# ╔═╡ 93acf058-8c25-11eb-1cb5-d391f007119c
+"Dynamic game estimation."
+module DGE
+
+using LinearAlgebra
+
+function transition(data)
+	states = sort(unique(data.x))
+	actions = sort(unique(data.a))
+	N = size(data.a,1)
+	avec =  vec([a for a ∈ Iterators.product(ntuple(i->actions, N)...)])
+	return(
+	let ex = [sum((data.x[2:end].==x̃) .& (data.x[1:(end-1)].==x) 
+				.& all(data.a[:,1:(end-1)].==avec[a],dims=1)) /
+			sum((data.x[1:(end-1)].==x) .& all(data.a[:,1:(end-1)].==avec[a],dims=1)) 
+			for x̃ ∈ states, x ∈ states, a ∈ 1:length(avec)]
+		function Ex(x, a)
+			return(ex[:,x,findfirst(all(v.==a) for v ∈ avec)])
+		end
+	end	
+	)
+end
+
+function choiceprob(data)
+	states = sort(unique(data.x))
+	actions = sort(unique(data.a))
+	N = size(data.a,1)	
+	return([sum( (data.a[i,:].==a) .& (data.x.==x)) /
+			sum(data.x.==x) for i ∈ 1:N, a ∈ actions, x ∈ states])
+end
+
+function estimateconstructive(data, β; a0=1)
+	states = sort(unique(data.x))
+	actions = sort(unique(data.a))
+	N  = size(data.a,1)
+	P  = choiceprob(data)
+	Eu = similar(P)
+	Eu[:,a0,:] .= 0
+	v = similar(P)
+	# P(x'|a_i,x,i)
+	Pxi = [sum((data.x[2:end].==x̃) .& (data.x[1:(end-1)].==x) 
+			   .& (data.a[i,1:(end-1)].==a)) /
+		   sum((data.x[1:(end-1)].==x) .& (data.a[i,1:(end-1)].==a) )
+		   for x̃ ∈ states, a ∈ actions, x ∈ states, i ∈ 1:N]
+		
+	# recover v[:,a0,:]
+	for i ∈ 1:N 
+		q = [Base.MathConstants.γ - log(P[i,a0,x]) for x ∈ states]
+		E = Pxi[:,a0,:,i]'
+		y = Eu[i,a0,:] + β*E*q
+		v[i,a0,:] .= (I - β*E) \ y
+	
+		for a ∈ actions
+			if a ≠ a0
+				v[i,a,:] .= log.(P[i,a,:]) .- log.(P[i,a0,:]) .+ v[i,a0,:]
+			end			
+		end
+		# recover E[u(a[i],a[-i],x)|a[i],x]
+		#q = [Base.MathConstants.γ + log(sum(exp.(v[i,:,x]))) for x ∈ states]
+		for a ∈ actions
+			E = Pxi[:,a,:,i]'
+			Eu[i,a,:] .= v[i,a,:] .- β*E*q
+		end
+	end
+	
+	return(Eu=Eu, v=v)	
+	
 end
 
 end
@@ -236,7 +308,7 @@ where $\epsilon_i[a]$ are i.i.d. Gumbel(0,1) distributed (as in a multinomial lo
 
 To compute the equilibrium and estimate the model, we will work choice specific value functions as functions of choice-probabilities. Given choice probabilities, $P[i,a,x] = P(aᵢ==a|x)$, define choice specific value functions as the solution to
 ```math
-v^p[i,a_i,x] = \sum_{a_{-i}} P(a_{-i}|x) \left( u(i,a_i, a_{-i}) + \beta \sum_{x'} P(x'|a_i, a_{-i}, x) \sum_{a'} P[i,a',x'] (v^p[i, a', x'] + E\left[\epsilon[a']\,\vert\,v^p[i, a', x'] + \epsilon[a'] \geq v^p[i, \tilde{a}, x'] + \epsilon[\tilde{a}]\right] \right)
+v^p[i,a_i,x] = \sum_{a_{-i}} P(a_{-i}|x) \left( u(i,a_i, a_{-i},x) + \beta \sum_{x'} P(x'|a_i, a_{-i}, x) \sum_{a'} P[i,a',x'] (v^p[i, a', x'] + E\left[\epsilon[a']\,\vert\,v^p[i, a', x'] + \epsilon[a'] \geq v^p[i, \tilde{a}, x'] + \epsilon[\tilde{a}]\right] \right)
 ```
 
 Note that the last term in the above expression can pe written as a function of choice probabilities and the distribution of $\epsilon$. For the Gumbel distribution, it becomes ([see here for a derivation](https://stats.stackexchange.com/a/192495/1229)):
@@ -293,8 +365,9 @@ The payoff function could be thought of as some kind of entry/exit game. Action 
 	stateind(s::AbstractVector)=findfirst([s==st for st in states])
 	u(i, a, x::Integer) = u(i,a,statevec(x))
 	function u(i, a, s::AbstractVector)
-		return( s[i]*(1 + sum(s[(N+1):end]) - sum(s[1:N]) + s[i])
-			- 0.5*abs((a[i]-1) - s[i]) - 1*(a[i]-1))
+		return( (a[i]-1)*s[i]*(1 + sum(s[(N+1):end]) - sum(s[1:N]) + s[i])
+			- 0.7*(a[i]-1)*(1-s[i]) # entry cost
+			- 1*(a[i]-1)) # fixed cost
 	end
 
 	Ex(a, x::Integer) = Ex(a, statevec(x))
@@ -351,10 +424,12 @@ let
 		v = DG.vᵖ(g, p)
 		for x in g.states
 			@show x,statevec(x)
-			@show p[1,:,x]			
-			@show v[1,:,x]
-			@show p[2,:,x]
-			@show v[2,:,x]
+			for i in 1:g.N
+				@show p[i,:,x]			
+				@show v[i,:,x]
+			end
+			#@show p[2,:,x]
+			#@show v[2,:,x]
 		end
 	end
 end
@@ -365,7 +440,7 @@ Now we will simulate the model and verify that the model value functions match t
 """
 
 # ╔═╡ 4c7340f6-8b77-11eb-2f62-9f3f6422d95e
-sim = DG.simulate(g, 10000, out[2], burnin=0, x0=1)
+sim = DG.simulate(g, 1000, out[2], burnin=0, x0=1)
 
 	
 
@@ -397,17 +472,37 @@ We can also check that deviating from the equilibrium choice probabilities lower
 
 # ╔═╡ 348a21de-8beb-11eb-027f-5d519ea12572
 let
-	T = 500
-	seed = 11
+	T = 4000
+	seed = reinterpret(Int, time())
 	Random.seed!(seed)
 	P = copy(out[2])
 	s0 = DG.simulate(g, T, out[2] , burnin=0, x0=1)
-	dp = min(0.05, minimum(P[1,1,:]))
+	Random.seed!(reinterpret(Int, time()))
+	dp = min(0.2,minimum(P[1,:,:]))*(2*rand(size(P,3)).-1)
 	P[1,1,:] .-= dp
 	P[1,2,:] .+= dp
+    Random.seed!(seed)
 	s1 = DG.simulate(g, T, P, burnin=0, x0=1)
-	mean(s0.u[1,:]) - mean(s1.u[1,:])
+	
+	function EV(sim)
+		ev = zeros(g.N,length(g.states))
+		ev2 = zeros(g.N,length(g.states))
+		for x in unique(sim.x) #, a in g.actions
+			t0 = findall((x.==sim.x))# .& (a.==sim.a[1,:]))
+			for i in 1:g.N
+				ev[i,x] = mean( [sum(sim.u[i,t:end].*(g.β.^(0:(T-t)))) for t in t0] )
+			end
+		end
+		return(ev)
+	end
+	(mean(s0.a .!= s1.a), EV(s0)[1,:] - EV(s1)[1,:])
 end
+
+# ╔═╡ 27ab599c-8c06-11eb-36c3-090611cb8458
+
+
+# ╔═╡ 94110c2a-8c03-11eb-3d00-ebab8f1d3811
+[t:(t+9) for t in 1:10:100]
 
 # ╔═╡ 0518cb98-8bec-11eb-1c55-e19103432968
 md"""
@@ -459,7 +554,11 @@ let
 	f1 = heatmap(g.states,g.actions,Pa[1,:,:], xlab="State", ylab="Action", 
 		title="P(Action|State, i=1)",
 	 	c=cgrad([:white,:orange]),
-		yticks=(1:2, ["out","in"]))
+		yticks=(1:2, ["out","in"]),
+		xticks=(1:S, (x->"$x").(statevec.(1:S))),
+		xrotation=45,
+		tickfontsize=8)
+	if (g.N > 1)
 	f2 = heatmap(1:S,1:A,Pa[2,:,:], xlab="State", ylab="Action", 
 		title="P(Action|State, i=2)",
 	 	c=cgrad([:white,:orange]),
@@ -468,6 +567,23 @@ let
 		xrotation=45,
 		tickfontsize=8)
 	plot(f1,f2, layout=(2,1))	
+	else
+		f1
+	end
+end
+
+# ╔═╡ 2732717a-8c07-11eb-3a00-d19cfae02477
+let 
+	S = length(g.states)
+	histogram(sim.x, legend=:none, xlab="state",
+		xticks=(1:S, (x->"$x").(statevec.(1:S))),
+		xrotation=45,
+		tickfontsize=8)
+end
+
+# ╔═╡ 5b3a2268-8c07-11eb-31bb-a320fd9e7bb0
+let 
+	histogram(vec(sim.a), legend=:none, xlab="action", xticks=1:2)
 end
 
 # ╔═╡ 647103a0-8b95-11eb-29bc-6d26c83d4a13
@@ -475,8 +591,24 @@ md"""
 # Estimation
 """
 
-# ╔═╡ d7a8ba6e-8bec-11eb-3920-a3313339ff4a
+# ╔═╡ bcf434a4-8c1a-11eb-3a82-37a4c14beab5
+let
+	data = sim
+	actions = unique(data.a)
+	a = 1
+	avec =  vec([[a...] for a ∈ Iterators.product(ntuple(i->actions, g.N)...)])
+	all(data.a[:,1:(end-1)].==avec[a], dims=1)
+	avec 
+end
 
+# ╔═╡ 636335f4-8c24-11eb-2c1a-e5d5358f2af7
+let
+	sd = DG.simulate(g, 5000, out[2], burnin=0, x0=1)
+	Eu, v = DGE.estimateconstructive(sd, g.β)
+	[[g.u(1,[2,1],x) - g.u(1,[1,1],x) for x in g.states] Eu[1,2,:]-Eu[1,1,:]]
+	#vᵖ = DG.vᵖ(g, out[2])
+	#[vᵖ[1,2,:]-vᵖ[1,1,:] v[1,2,:]-v[1,1,:]]
+end
 
 # ╔═╡ Cell order:
 # ╟─dd4c95aa-8a82-11eb-3be1-9309fb5be5af
@@ -497,10 +629,16 @@ md"""
 # ╠═9a6e598c-8b7a-11eb-0b29-c57ecadec0aa
 # ╟─1a253676-8beb-11eb-1d16-170c65346d9f
 # ╠═348a21de-8beb-11eb-027f-5d519ea12572
+# ╠═27ab599c-8c06-11eb-36c3-090611cb8458
+# ╠═94110c2a-8c03-11eb-3d00-ebab8f1d3811
 # ╟─0518cb98-8bec-11eb-1c55-e19103432968
 # ╟─8dfbd0c6-8b75-11eb-3643-05334135f3ce
 # ╠═89d97f3a-8be2-11eb-3faf-ad0a6dc22571
 # ╠═5351f0d0-8be4-11eb-05da-75dfb199544f
 # ╠═0af9d260-8be6-11eb-2d51-5f803d5456bf
+# ╠═2732717a-8c07-11eb-3a00-d19cfae02477
+# ╠═5b3a2268-8c07-11eb-31bb-a320fd9e7bb0
 # ╠═647103a0-8b95-11eb-29bc-6d26c83d4a13
-# ╠═d7a8ba6e-8bec-11eb-3920-a3313339ff4a
+# ╠═bcf434a4-8c1a-11eb-3a82-37a4c14beab5
+# ╠═93acf058-8c25-11eb-1cb5-d391f007119c
+# ╠═636335f4-8c24-11eb-2c1a-e5d5358f2af7
