@@ -13,6 +13,17 @@ using Statistics, DataFrames
 # ╔═╡ 038e7ae0-6746-11eb-21e0-3d708015b0ea
 using Plots
 
+# ╔═╡ c17cd758-6c83-11eb-1371-c718db546099
+begin 
+	try 
+		import ForwardDiff
+	catch
+		using Pkg
+		Pkg.add("ForwardDiff")
+		import ForwardDiff
+	end
+end
+
 # ╔═╡ 32dfd312-6178-11eb-2e72-f5f09e4cc4b6
 md"""
 # Demand Estimation
@@ -23,6 +34,9 @@ Paul Schrimpf
 [![Creative Commons License](https://i.creativecommons.org/l/by-sa/4.0/88x31.png)](http://creativecommons.org/licenses/by-sa/4.0/)
 [Creative Commons Attribution-ShareAlike 4.0 International License](http://creativecommons.org/licenses/by-sa/4.0/)
 """
+
+# ╔═╡ 96a73e52-6c9b-11eb-1398-11e7ace02591
+
 
 # ╔═╡ 8da42168-6178-11eb-0e5d-cfdfd8393b3c
 md"""
@@ -177,10 +191,12 @@ sim = simulateBLP(J, T, β, σ, γ, S, varξ=sξ, varω=sω);
 # ╔═╡ 01554514-6a67-11eb-2f58-395e4703d401
 begin
 	using Optim, LineSearches
+	nfxp = []
 	PlutoUI.with_terminal() do
-		nfxp = estimateBLP(sim.dat, method=:NFXP, verbose=true,
+		out = estimateBLP(sim.dat, method=:NFXP, verbose=true,
 			  			   optimizer = LBFGS(linesearch=LineSearches.HagerZhang()))
-	end
+		push!(nfxp, out)
+	end	
 end
 
 # ╔═╡ 06c04b06-6741-11eb-1fb3-effcbc26fbbe
@@ -255,7 +271,7 @@ Let $\delta_t$ denote the vector $J$ values of $\delta_{jt}$ in market $t$.
 
 Define the share as a function of $\delta_t$ as
 ```math
-\sigma_{jt}(\delta_t;\theta) =  \int \frac{e^{\delta_jt + x_{jt}' \Sigma \nu}}
+\sigma_{jt}(\delta_t;\theta) =  \int \frac{e^{\delta_{jt} + x_{jt}' \Sigma \nu}}
 {1 + \sum_{k=1}^J e^{\delta_{kt} + x_{kt}' \Sigma \nu_{it} }}  dF_\nu(\nu)
 ```
 where $\theta$ denotes all the parameters to be estimated.
@@ -301,6 +317,34 @@ To esitmate $\theta$ we minimize a quadratic form in the empirical moments:
 """
 
 
+# ╔═╡ 9821db60-6c7e-11eb-12e5-5d8473fc46a6
+let
+
+	m = ones(1,1)
+	v = ones(1)
+	dσ = ones(ForwardDiff.Dual,1)
+	str = @code_string estimateBLP(sim.dat) 
+	#str = @code_string demandmoments(β,σ, sim.dat)
+	#str = @code_string supplymoments(γ, β, σ, zeros(1), sim.dat)
+	#str = @code_string BLPDemand.delta(v,m,m, dσ)
+	#str = @code_string dsharedp(β, σ, v, m, m, v)
+	#str = @code_string share(v,v,m,m)	
+	str = "```julia\n"*str*"\n```\n"
+	Markdown.parse(str)
+end
+
+# ╔═╡ 5ddc1cae-6c97-11eb-05ee-1f708fa5d7af
+
+
+# ╔═╡ 9ae7322a-6c95-11eb-347a-9b4fd26134c5
+
+
+# ╔═╡ 740f89b8-6c95-11eb-26d4-5949f57491e3
+
+
+# ╔═╡ 67889c1a-6c91-11eb-0ec7-dbc7f515ef30
+
+
 # ╔═╡ b45bd3c4-6a6e-11eb-0004-3f0ebdec62e0
 
 
@@ -327,6 +371,12 @@ md"""
     We need to compute deriviatives of many of the functions above. $\frac{\partial \sigma}{\partial p}$ is part of the moment conditions. Minimization algorithms can be much more efficient if we provide the gradient and/or hessian of the objective function. Finally, the asymptotic variance of $\theta$ involves the Jacobian of the moment conditions (i.e. $D_\theta g_{jt} (\Delta(s_t;\theta),\theta) $). While we could calculate these derivatives by hand and then write code to compute them, there is a less laborious and error-prone way. Automatic differentiation refers to taking code that computes some function, $f(x)$ and algorithmically applying the chain rule to compute $\frac{df}{dx}$. One of Julia's nicest features is how well it supports automatic differentiation. The two leading Julia packages for automatic differentiation are [ForwardDiff.jl](https://github.com/JuliaDiff/ForwardDiff.jl) and [Zygote.jl](https://github.com/FluxML/Zygote.jl). ForwardDiff.jl is usually a good choice for function from $R^n \to R^k$ with $n$ not too much larger than $k$. Zygote.jl is somewhat more restrictive in what code it is compatible with, but is more efficient if $n$ is much much larger than $k$. You can read more in the [Quantecon notes on automatic differentiation](https://julia.quantecon.org/more_julia/optimization_solver_packages.html).
 """
 
+# ╔═╡ 6dcfe5c0-6c93-11eb-2afb-d7cac4eccc69
+nfxp[1]
+
+# ╔═╡ 919c3668-6c93-11eb-3326-8db375c7a7ff
+sqrt(eps(Float64)) 
+
 # ╔═╡ fd33a886-6a6b-11eb-3e5f-655d4a95cfbf
 md"""
 
@@ -344,15 +394,23 @@ Note that this problem no longer requires compute $\Delta(s,\theta)$, so there i
 """
 
 # ╔═╡ 48df1e86-6a6f-11eb-1fa4-018317fc7664
-PlutoUI.with_terminal() do
-	mpec = estimateBLP(sim.dat, method=:MPEC, verbose=true)
+begin
+	mpec = []
+	PlutoUI.with_terminal() do
+		out=estimateBLP(sim.dat, method=:MPEC, verbose=true)
+		push!(mpec, out)
+	end
 end
+
+# ╔═╡ 1133f980-6c8d-11eb-18d1-1753b0e2ebce
+mpec[1]
 
 # ╔═╡ a578173c-6a6b-11eb-0171-43b29df3bbbb
 
 
 # ╔═╡ Cell order:
 # ╟─32dfd312-6178-11eb-2e72-f5f09e4cc4b6
+# ╠═96a73e52-6c9b-11eb-1398-11e7ace02591
 # ╟─8da42168-6178-11eb-0e5d-cfdfd8393b3c
 # ╟─c21e0bc0-6178-11eb-1dad-cf2f0766862e
 # ╟─4b7ae8e6-6180-11eb-0e60-1969cb0229a7
@@ -379,10 +437,19 @@ end
 # ╠═5b80e12a-6748-11eb-0a2c-3d272d21c92a
 # ╠═f4091954-6745-11eb-1acf-f9878b37d78c
 # ╟─e4b9cc8a-6751-11eb-3e0b-01ea772ac1b3
+# ╟─c17cd758-6c83-11eb-1371-c718db546099
+# ╠═9821db60-6c7e-11eb-12e5-5d8473fc46a6
+# ╠═5ddc1cae-6c97-11eb-05ee-1f708fa5d7af
+# ╠═9ae7322a-6c95-11eb-347a-9b4fd26134c5
+# ╠═740f89b8-6c95-11eb-26d4-5949f57491e3
+# ╠═67889c1a-6c91-11eb-0ec7-dbc7f515ef30
 # ╟─b45bd3c4-6a6e-11eb-0004-3f0ebdec62e0
 # ╟─690b6616-6a62-11eb-2dbf-c9699fc9785f
 # ╟─597b178e-674a-11eb-3a2e-e9a363c00a85
 # ╠═01554514-6a67-11eb-2f58-395e4703d401
+# ╠═6dcfe5c0-6c93-11eb-2afb-d7cac4eccc69
+# ╠═919c3668-6c93-11eb-3326-8db375c7a7ff
 # ╟─fd33a886-6a6b-11eb-3e5f-655d4a95cfbf
 # ╠═48df1e86-6a6f-11eb-1fa4-018317fc7664
+# ╠═1133f980-6c8d-11eb-18d1-1753b0e2ebce
 # ╟─a578173c-6a6b-11eb-0171-43b29df3bbbb
