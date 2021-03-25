@@ -5,7 +5,7 @@ using Markdown
 using InteractiveUtils
 
 # ╔═╡ b7f912b2-8b48-11eb-080e-c3edaf9b55c4
-using PlutoUI, Plots, Statistics, StatsPlots, Random
+using PlutoUI, Plots, Statistics, StatsPlots, Random, PrettyTables, DataFrames, Printf
 
 # ╔═╡ ed50e4f4-8a84-11eb-2e5b-075cfdea1280
 module DG
@@ -203,24 +203,7 @@ end
 "Dynamic game estimation."
 module DGE
 
-using LinearAlgebra
-
-function transition(data)
-	states = sort(unique(data.x))
-	actions = sort(unique(data.a))
-	N = size(data.a,1)
-	avec =  vec([a for a ∈ Iterators.product(ntuple(i->actions, N)...)])
-	return(
-	let ex = [sum((data.x[2:end].==x̃) .& (data.x[1:(end-1)].==x) 
-				.& all(data.a[:,1:(end-1)].==avec[a],dims=1)) /
-			sum((data.x[1:(end-1)].==x) .& all(data.a[:,1:(end-1)].==avec[a],dims=1)) 
-			for x̃ ∈ states, x ∈ states, a ∈ 1:length(avec)]
-		function Ex(x, a)
-			return(ex[:,x,findfirst(all(v.==a) for v ∈ avec)])
-		end
-	end	
-	)
-end
+using LinearAlgebra,  Statistics, Distributions
 
 function choiceprob(data)
 	states = sort(unique(data.x))
@@ -230,24 +213,30 @@ function choiceprob(data)
 			sum(data.x.==x) for i ∈ 1:N, a ∈ actions, x ∈ states])
 end
 
-function estimateconstructive(data, β; a0=1)
+function transitioni(data)
+	# P(x'|a_i,x,i)	
 	states = sort(unique(data.x))
 	actions = sort(unique(data.a))
 	N  = size(data.a,1)
-	P  = choiceprob(data)
-	Eu = similar(P)
-	Eu[:,a0,:] .= 0
-	v = similar(P)
-	# P(x'|a_i,x,i)
 	Pxi = [sum((data.x[2:end].==x̃) .& (data.x[1:(end-1)].==x) 
 			   .& (data.a[i,1:(end-1)].==a)) /
 		   sum((data.x[1:(end-1)].==x) .& (data.a[i,1:(end-1)].==a) )
-		   for x̃ ∈ states, a ∈ actions, x ∈ states, i ∈ 1:N]
+		   for i ∈ 1:N, x̃ ∈ states, a ∈ actions, x ∈ states]
+	return(Pxi)
+end
+
+function constructu(data, β; P=choiceprob(data), Pxi=transitioni(data), a0=1)
+	states = sort(unique(data.x))
+	actions = sort(unique(data.a))
+	N  = size(data.a,1)
+	Eu = similar(P)
+	Eu[:,a0,:] .= 0
+	v = similar(P)
 		
 	# recover v[:,a0,:]
 	for i ∈ 1:N 
 		q = [Base.MathConstants.γ - log(P[i,a0,x]) for x ∈ states]
-		E = Pxi[:,a0,:,i]'
+		E = Pxi[i,:,a0,:]'
 		y = Eu[i,a0,:] + β*E*q
 		v[i,a0,:] .= (I - β*E) \ y
 	
@@ -257,18 +246,53 @@ function estimateconstructive(data, β; a0=1)
 			end			
 		end
 		# recover E[u(a[i],a[-i],x)|a[i],x]
-		#q = [Base.MathConstants.γ + log(sum(exp.(v[i,:,x]))) for x ∈ states]
+		q = [Base.MathConstants.γ + log(sum(exp.(v[i,:,x]))) for x ∈ states]
 		for a ∈ actions
-			E = Pxi[:,a,:,i]'
+			E = Pxi[i,:,a,:]'
 			Eu[i,a,:] .= v[i,a,:] .- β*E*q
 		end
 	end
-	
 	return(Eu=Eu, v=v)	
-	
 end
 
+
+function transition(data)
+	states = sort(unique(data.x))
+	actions = sort(unique(data.a))
+	N  = size(data.a,1)	
+	if N != 2
+		error("transition assumes 2 players")
+	end
+	Px = [sum( (data.x[2:end] .== x̃) .& 
+			(data.a[1,1:(end-1)].==a1) .& 
+			(data.a[2,1:(end-1)].==a2) .& 
+			(data.x[1:(end-1)].==x)) /
+		 sum((data.a[1,1:(end-1)].==a1) .& 
+			(data.a[2,1:(end-1)].==a2) .& 
+			(data.x[1:(end-1)].==x)) for x̃ ∈ states, 
+			a1 ∈ actions, a2 ∈ actions, x ∈ states ]
+	Px[isnan.(Px)] .= 0 ./ length(states)
+	return(Px)
 end
+
+		
+function markovbootstrap(data, P = choiceprobs(data), Px=transition(data))
+	states = sort(unique(data.x))
+	actions = sort(unique(data.a))
+	N  = size(data.a,1)	
+	bd = deepcopy(data)
+	T = length(data.x)
+	for t ∈ 2:T
+		bd.x[t] = rand(DiscreteNonParametric(states, Px[:,bd.a[:,t-1]...,bd.x[t-1]]))
+		for i in 1:N
+			bd.a[i,t] = rand(DiscreteNonParametric(actions,P[i,:,bd.x[t]]))
+		end
+	end
+	return(bd)
+end
+			
+end			
+			
 
 # ╔═╡ dd4c95aa-8a82-11eb-3be1-9309fb5be5af
 md"""
@@ -350,14 +374,14 @@ The following code defines the payoff function and transition probabilities of t
 
 Each firm chooses action 1 or 2. The state consists of each firms' previous action, and `Nexternal` binary values that evolve exogenously. 
 
-The payoff function could be thought of as some kind of entry/exit game. Action 1 is exit, 2 in entry (or continued operation). The payoff consists of revenues if you entered/continued operation last period, minus a cost of operation / entry, minus a cost of switching from exit to entry and vice versa. The revenues of operating decline with the number of other firms operating, and increase with the external states.
+The payoff function could be thought of as some kind of entry/exit game. Action 1 is exit, 2 in entry (or continued operation). The payoff of exit is 0. The payoff of operating consists of revenues if you entered/continued operation last period, minus a cost of operation, minus an additional entry cost. The revenues of operating decline with the number of other firms operating, and increase with the external states.
 
 """
 
 # ╔═╡ dfbf24ee-8a97-11eb-368f-555cd55c151e
 (N, ns, u, Ex, statevec, stateind, states) = let
 	N = 2
-	Nexternal=2
+	Nexternal=1
 	
 	# There's often some tedious book keeping involved in going from an integer state index to a vector representation of a state 
 	states = BitVector.(digits.(0:(2^(N+Nexternal)-1), base=2, pad=N+Nexternal))
@@ -365,9 +389,9 @@ The payoff function could be thought of as some kind of entry/exit game. Action 
 	stateind(s::AbstractVector)=findfirst([s==st for st in states])
 	u(i, a, x::Integer) = u(i,a,statevec(x))
 	function u(i, a, s::AbstractVector)
-		return( (a[i]-1)*s[i]*(1 + sum(s[(N+1):end]) - sum(s[1:N]) + s[i])
-			- 0.7*(a[i]-1)*(1-s[i]) # entry cost
-			- 1*(a[i]-1)) # fixed cost
+		return( (a[i]-1)*s[i]*(3-Nexternal/2 + sum(s[(N+1):end]) - sum(s[1:N]))
+			- 0.5*(a[i]-1)*(1-s[i]) # entry cost
+			- s[i]*(0.8 + 0.1*sum(s[1:N]))*(a[i]-1)) # fixed cost
 	end
 
 	Ex(a, x::Integer) = Ex(a, statevec(x))
@@ -478,7 +502,7 @@ let
 	P = copy(out[2])
 	s0 = DG.simulate(g, T, out[2] , burnin=0, x0=1)
 	Random.seed!(reinterpret(Int, time()))
-	dp = min(0.2,minimum(P[1,:,:]))*(2*rand(size(P,3)).-1)
+	dp = min(0.5,minimum(P[1,:,:]))*(2*rand(size(P,3)).-1)
 	P[1,1,:] .-= dp
 	P[1,2,:] .+= dp
     Random.seed!(seed)
@@ -589,26 +613,77 @@ end
 # ╔═╡ 647103a0-8b95-11eb-29bc-6d26c83d4a13
 md"""
 # Estimation
+
+We will estimate the model by following the steps of the identification proof in the slides. That identification argument is constructive --- it explicitly states how to compute the payoff function given choice and transition probabilities. This estimation approach has the advantage of being numerically stable. However, it might not be as statistically efficient as a maximum likelihood or method of moments estimator.
+
+
 """
 
-# ╔═╡ bcf434a4-8c1a-11eb-3a82-37a4c14beab5
-let
-	data = sim
-	actions = unique(data.a)
-	a = 1
-	avec =  vec([[a...] for a ∈ Iterators.product(ntuple(i->actions, g.N)...)])
-	all(data.a[:,1:(end-1)].==avec[a], dims=1)
-	avec 
-end
+# ╔═╡ 1a0a9746-8cca-11eb-2e39-ebb28670afa5
+md"""
+
+The function `constructu` estimates choice specific value functions and expected payoffs, $E_x[u(a_i,a_{-i},x)|a_i,x]$, given choice and transition probabilities. It does this by using the Hotz-Miller inversion (the relationship between choice probabilities and choice specific value functions), and then working with the Bellman-like equations.
+
+To recover, $u(a_i,a_{-i},x)$ from the expected payoffs, we would impose a restriction on $u$ and use the relationship 
+
+```math
+E_x[u(a_i,a_{-i},x)|a_i,x] = \sum_{a_{-i}} \prod_{j\neq i} P(a_j|x) u(a_i, a_{-i}, x)
+```
+In this model, the restriction on $u$ is simply that $a_{-i}$ does not enter $u$ ($a_{-i}$ only affects future payoffs by shifting future $x$). In this case, we simply have $u(a_i, x) = E_x[u(a_i,a_{-i},x)|a_i,x]$
+
+"""
+
+# ╔═╡ 245e383e-8cce-11eb-01d8-755c79a03c59
+sd = DG.simulate(g, 1000, out[2], burnin=0, x0=1);
 
 # ╔═╡ 636335f4-8c24-11eb-2c1a-e5d5358f2af7
 let
-	sd = DG.simulate(g, 5000, out[2], burnin=0, x0=1)
-	Eu, v = DGE.estimateconstructive(sd, g.β)
-	[[g.u(1,[2,1],x) - g.u(1,[1,1],x) for x in g.states] Eu[1,2,:]-Eu[1,1,:]]
-	#vᵖ = DG.vᵖ(g, out[2])
-	#[vᵖ[1,2,:]-vᵖ[1,1,:] v[1,2,:]-v[1,1,:]]
+	Eu, _ = DGE.constructu(sd, g.β)
+	pretty_table(String,
+		DataFrame("x"=>statevec.(g.states),
+				  "u"=>[g.u(1,[2,1],x) for x in g.states],
+				  "û"=>Eu[1,2,:]),
+		backend=:html) |> HTML
 end
+
+# ╔═╡ 2e53f28a-8cc3-11eb-1e2b-3bdb9288b364
+md"""
+
+## Inference
+
+Since the estimator is relatively fast, using bootstrap for inference is reasonable. We must be careful to preserve the dependence in the data when resampling the data. Simply resampling observations with replacement would not be correct. If the data came from many independent markets, we could sample markets with replacement. However, the simulated data is from a single market for many time periods. We could use the block bootstrap to preserve the time dependence. An arguably better approach given the Markovian assumptions of the model, is the Markov bootstrap of Horowitz (19??).   
+
+"""
+
+# ╔═╡ bafacfec-8cdc-11eb-091c-e9ad41a9fc9a
+let
+	T = length(sd.x)
+	B = 199
+	N = g.N
+	S = length(g.states)
+	A = length(g.actions)	
+	u = zeros(B, N, A, S)
+	ubs = zeros(B, N, A, S)
+	P = DGE.choiceprob(sd)
+	Px = DGE.transition(sd)
+	û,_ = DGE.constructu(sd,g.β)
+	for b in 1:B
+		sb = DG.simulate(g, T, out[2], burnin=0)
+		u[B,:,:,:], _ = DGE.constructu(sb, g.β)		
+		ubs[B,:,:,:],_ = DGE.constructu(DGE.markovbootstrap(sd,P,Px), g.β)
+	end
+	
+	simse = sqrt.([var(u[:,2,2,x]) for x in g.states])
+    bsse = sqrt.([var(ubs[:,2,2,x]) for x in g.states])
+	pretty_table(String,
+		DataFrame("x"=>statevec.(g.states),
+				  "u(i=1,a=2,x)"=>[g.u(1,[2,2],x) for x in g.states],
+				  "û(i=1,a=2,x)"=>û[1,2,:],
+			      "bsSE"=>(s->"($(@sprintf("%.2f",s)))").(bsse),
+				  "simSE"=>(s->"($(@sprintf("%.2f",s)))").(simse)),				  
+		backend=:html) |> HTML
+end
+	
 
 # ╔═╡ Cell order:
 # ╟─dd4c95aa-8a82-11eb-3be1-9309fb5be5af
@@ -638,7 +713,10 @@ end
 # ╠═0af9d260-8be6-11eb-2d51-5f803d5456bf
 # ╠═2732717a-8c07-11eb-3a00-d19cfae02477
 # ╠═5b3a2268-8c07-11eb-31bb-a320fd9e7bb0
-# ╠═647103a0-8b95-11eb-29bc-6d26c83d4a13
-# ╠═bcf434a4-8c1a-11eb-3a82-37a4c14beab5
+# ╟─647103a0-8b95-11eb-29bc-6d26c83d4a13
 # ╠═93acf058-8c25-11eb-1cb5-d391f007119c
+# ╟─1a0a9746-8cca-11eb-2e39-ebb28670afa5
+# ╠═245e383e-8cce-11eb-01d8-755c79a03c59
 # ╠═636335f4-8c24-11eb-2c1a-e5d5358f2af7
+# ╟─2e53f28a-8cc3-11eb-1e2b-3bdb9288b364
+# ╠═bafacfec-8cdc-11eb-091c-e9ad41a9fc9a
