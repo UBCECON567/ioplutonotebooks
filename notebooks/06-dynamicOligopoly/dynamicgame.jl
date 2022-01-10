@@ -209,8 +209,10 @@ function choiceprob(data)
 	states = sort(unique(data.x))
 	actions = sort(unique(data.a))
 	N = size(data.a,1)	
-	return([sum( (data.a[i,:].==a) .& (data.x.==x)) /
-			sum(data.x.==x) for i ∈ 1:N, a ∈ actions, x ∈ states])
+	P = [sum( (data.a[i,:].==a) .& (data.x.==x)) /
+			sum(data.x.==x) for i ∈ 1:N, a ∈ actions, x ∈ states]
+	P[isnan.(P)] .= 1/length(actions)
+	return P
 end
 
 function transitioni(data)
@@ -222,6 +224,7 @@ function transitioni(data)
 			   .& (data.a[i,1:(end-1)].==a)) /
 		   sum((data.x[1:(end-1)].==x) .& (data.a[i,1:(end-1)].==a) )
 		   for i ∈ 1:N, x̃ ∈ states, a ∈ actions, x ∈ states]
+	Pxi[isnan.(Pxi)] .= 1/length(states)
 	return(Pxi)
 end
 
@@ -271,7 +274,7 @@ function transition(data)
 			(data.a[2,1:(end-1)].==a2) .& 
 			(data.x[1:(end-1)].==x)) for x̃ ∈ states, 
 			a1 ∈ actions, a2 ∈ actions, x ∈ states ]
-	Px[isnan.(Px)] .= 0 ./ length(states)
+	Px[isnan.(Px)] .= 1 ./ length(states)
 	return(Px)
 end
 
@@ -413,6 +416,9 @@ end
 
 
 
+# ╔═╡ ee5d3b66-8d88-11eb-03e4-0fd076a645ef
+
+
 # ╔═╡ 7f7ecd96-8b93-11eb-0505-0925707e55c2
 md"""
 ## Compute the Equilibrium
@@ -496,7 +502,7 @@ We can also check that deviating from the equilibrium choice probabilities lower
 
 # ╔═╡ 348a21de-8beb-11eb-027f-5d519ea12572
 let
-	T = 4000
+	T = 10000
 	seed = reinterpret(Int, time())
 	Random.seed!(seed)
 	P = copy(out[2])
@@ -521,12 +527,6 @@ let
 	end
 	(mean(s0.a .!= s1.a), EV(s0)[1,:] - EV(s1)[1,:])
 end
-
-# ╔═╡ 27ab599c-8c06-11eb-36c3-090611cb8458
-
-
-# ╔═╡ 94110c2a-8c03-11eb-3d00-ebab8f1d3811
-[t:(t+9) for t in 1:10:100]
 
 # ╔═╡ 0518cb98-8bec-11eb-1c55-e19103432968
 md"""
@@ -619,6 +619,9 @@ We will estimate the model by following the steps of the identification proof in
 
 """
 
+# ╔═╡ 61623b42-8d8a-11eb-1672-cde2fd7af1af
+
+
 # ╔═╡ 1a0a9746-8cca-11eb-2e39-ebb28670afa5
 md"""
 
@@ -641,8 +644,8 @@ let
 	Eu, _ = DGE.constructu(sd, g.β)
 	pretty_table(String,
 		DataFrame("x"=>statevec.(g.states),
-				  "u"=>[g.u(1,[2,1],x) for x in g.states],
-				  "û"=>Eu[1,2,:]),
+				  "u"=>[g.u(2,[2,2],x) for x in g.states],
+				  "û"=>Eu[2,2,:]),
 		backend=:html) |> HTML
 end
 
@@ -694,6 +697,7 @@ end
 # ╠═ed50e4f4-8a84-11eb-2e5b-075cfdea1280
 # ╟─2451bac4-8b8d-11eb-0a68-53f3fd21ffad
 # ╠═dfbf24ee-8a97-11eb-368f-555cd55c151e
+# ╠═ee5d3b66-8d88-11eb-03e4-0fd076a645ef
 # ╟─7f7ecd96-8b93-11eb-0505-0925707e55c2
 # ╠═81dcea24-8b24-11eb-0c49-3bc494f41eb8
 # ╟─3589d3b8-8b94-11eb-0351-9d70e67fc6ef
@@ -704,8 +708,6 @@ end
 # ╠═9a6e598c-8b7a-11eb-0b29-c57ecadec0aa
 # ╟─1a253676-8beb-11eb-1d16-170c65346d9f
 # ╠═348a21de-8beb-11eb-027f-5d519ea12572
-# ╠═27ab599c-8c06-11eb-36c3-090611cb8458
-# ╠═94110c2a-8c03-11eb-3d00-ebab8f1d3811
 # ╟─0518cb98-8bec-11eb-1c55-e19103432968
 # ╟─8dfbd0c6-8b75-11eb-3643-05334135f3ce
 # ╠═89d97f3a-8be2-11eb-3faf-ad0a6dc22571
@@ -715,6 +717,7 @@ end
 # ╠═5b3a2268-8c07-11eb-31bb-a320fd9e7bb0
 # ╟─647103a0-8b95-11eb-29bc-6d26c83d4a13
 # ╠═93acf058-8c25-11eb-1cb5-d391f007119c
+# ╠═61623b42-8d8a-11eb-1672-cde2fd7af1af
 # ╟─1a0a9746-8cca-11eb-2e39-ebb28670afa5
 # ╠═245e383e-8cce-11eb-01d8-755c79a03c59
 # ╠═636335f4-8c24-11eb-2c1a-e5d5358f2af7
