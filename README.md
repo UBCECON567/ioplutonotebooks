@@ -7,6 +7,6 @@ These are intended to run in the Julia environment at https://github.com/UBCECON
 
 ## Links to open the notebooks on binderhub:
 
-- [02-production/production.jl](https://mybinder.org/v2/gh/UBCECON567/juliabinder/main?urlpath=pluto/open?url=https://raw.githubusercontent.com/UBCECON567/ioplutonotebooks/main/notebooks/02-production/production.jl)
-- [03-demand/demand.jl](https://mybinder.org/v2/gh/UBCECON567/juliabinder/main?urlpath=pluto/open?url=https://raw.githubusercontent.com/UBCECON567/ioplutonotebooks/main/notebooks/03-demand/demand.jl)
-- [06-dynamicOligopoly/dynamicgame.jl](https://mybinder.org/v2/gh/UBCECON567/juliabinder/main?urlpath=pluto/open?url=https://raw.githubusercontent.com/UBCECON567/ioplutonotebooks/main/notebooks/06-dynamicOligopoly/dynamicgame.jl)
+- [02-production/production.jl](https://mybinder.org/v2/gh/UBCECON567/juliabinder/main?urlpath=pluto/open?url=https://raw.githubusercontent.com/UBCECON567/ioplutonotebooks/main/02-production/production.jl)
+- [03-demand/demand.jl](https://mybinder.org/v2/gh/UBCECON567/juliabinder/main?urlpath=pluto/open?url=https://raw.githubusercontent.com/UBCECON567/ioplutonotebooks/main/03-demand/demand.jl)
+- [06-dynamicOligopoly/dynamicgame.jl](https://mybinder.org/v2/gh/UBCECON567/juliabinder/main?urlpath=pluto/open?url=https://raw.githubusercontent.com/UBCECON567/ioplutonotebooks/main/06-dynamicOligopoly/dynamicgame.jl)
