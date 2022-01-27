@@ -1,8 +1,14 @@
 ### A Pluto.jl notebook ###
-# v0.12.20
+# v0.17.7
 
 using Markdown
 using InteractiveUtils
+
+# ╔═╡ 1f12140f-edbf-4522-966e-c8100bb4da26
+begin
+  import Pkg
+  Pkg.activate(Base.current_project())
+end
 
 # ╔═╡ 9a669df8-6179-11eb-2a04-b9229c951c5a
 using Revise, CodeTracking, BLPDemand, PlutoUI
@@ -12,17 +18,6 @@ using Statistics, DataFrames
 
 # ╔═╡ 038e7ae0-6746-11eb-21e0-3d708015b0ea
 using Plots
-
-# ╔═╡ c17cd758-6c83-11eb-1371-c718db546099
-begin 
-	try 
-		import ForwardDiff
-	catch
-		using Pkg
-		Pkg.add("ForwardDiff")
-		import ForwardDiff
-	end
-end
 
 # ╔═╡ 32dfd312-6178-11eb-2e72-f5f09e4cc4b6
 md"""
@@ -34,9 +29,6 @@ Paul Schrimpf
 [![Creative Commons License](https://i.creativecommons.org/l/by-sa/4.0/88x31.png)](http://creativecommons.org/licenses/by-sa/4.0/)
 [Creative Commons Attribution-ShareAlike 4.0 International License](http://creativecommons.org/licenses/by-sa/4.0/)
 """
-
-# ╔═╡ 96a73e52-6c9b-11eb-1398-11e7ace02591
-
 
 # ╔═╡ 8da42168-6178-11eb-0e5d-cfdfd8393b3c
 md"""
@@ -119,17 +111,6 @@ To ensure that finite equilibrium prices exist, it is important that all consume
 md"""
 To see the source for functions in `BLPDemand.jl` or any other package, you can use the `CodeTracking` package.
 """
-
-# ╔═╡ 57dd3c42-6b03-11eb-26fb-bfdc7e44e4eb
-function foo(x; y=1, z = 0)
-	x + y + z
-end
-
-# ╔═╡ 84ce65aa-6b03-11eb-238c-cf8ef02eb32f
-foo(1)
-
-# ╔═╡ 83c0b2bc-6b03-11eb-3b64-7343e9da29e3
-foo(1, z=10)
 
 # ╔═╡ 65bff59c-61a6-11eb-1dfc-ff3419eb6a0b
 md"""
@@ -317,6 +298,9 @@ To esitmate $\theta$ we minimize a quadratic form in the empirical moments:
 """
 
 
+# ╔═╡ c17cd758-6c83-11eb-1371-c718db546099
+import ForwardDiff
+
 # ╔═╡ 9821db60-6c7e-11eb-12e5-5d8473fc46a6
 let
 
@@ -332,18 +316,6 @@ let
 	str = "```julia\n"*str*"\n```\n"
 	Markdown.parse(str)
 end
-
-# ╔═╡ 5ddc1cae-6c97-11eb-05ee-1f708fa5d7af
-
-
-# ╔═╡ 9ae7322a-6c95-11eb-347a-9b4fd26134c5
-
-
-# ╔═╡ 740f89b8-6c95-11eb-26d4-5949f57491e3
-
-
-# ╔═╡ 67889c1a-6c91-11eb-0ec7-dbc7f515ef30
-
 
 # ╔═╡ b45bd3c4-6a6e-11eb-0004-3f0ebdec62e0
 
@@ -410,16 +382,13 @@ mpec[1]
 
 # ╔═╡ Cell order:
 # ╟─32dfd312-6178-11eb-2e72-f5f09e4cc4b6
-# ╠═96a73e52-6c9b-11eb-1398-11e7ace02591
 # ╟─8da42168-6178-11eb-0e5d-cfdfd8393b3c
 # ╟─c21e0bc0-6178-11eb-1dad-cf2f0766862e
 # ╟─4b7ae8e6-6180-11eb-0e60-1969cb0229a7
 # ╟─861ec9c8-6184-11eb-0d49-9b9e8573404c
 # ╟─106eab00-61a8-11eb-0396-3973ff51f91e
+# ╠═1f12140f-edbf-4522-966e-c8100bb4da26
 # ╠═9a669df8-6179-11eb-2a04-b9229c951c5a
-# ╠═57dd3c42-6b03-11eb-26fb-bfdc7e44e4eb
-# ╠═84ce65aa-6b03-11eb-238c-cf8ef02eb32f
-# ╠═83c0b2bc-6b03-11eb-3b64-7343e9da29e3
 # ╠═4b319506-617b-11eb-3de0-e1f2ba8d083f
 # ╟─65bff59c-61a6-11eb-1dfc-ff3419eb6a0b
 # ╠═8b218732-61a8-11eb-1304-95b305205fc3
@@ -437,12 +406,8 @@ mpec[1]
 # ╠═5b80e12a-6748-11eb-0a2c-3d272d21c92a
 # ╠═f4091954-6745-11eb-1acf-f9878b37d78c
 # ╟─e4b9cc8a-6751-11eb-3e0b-01ea772ac1b3
-# ╟─c17cd758-6c83-11eb-1371-c718db546099
+# ╠═c17cd758-6c83-11eb-1371-c718db546099
 # ╠═9821db60-6c7e-11eb-12e5-5d8473fc46a6
-# ╠═5ddc1cae-6c97-11eb-05ee-1f708fa5d7af
-# ╠═9ae7322a-6c95-11eb-347a-9b4fd26134c5
-# ╠═740f89b8-6c95-11eb-26d4-5949f57491e3
-# ╠═67889c1a-6c91-11eb-0ec7-dbc7f515ef30
 # ╟─b45bd3c4-6a6e-11eb-0004-3f0ebdec62e0
 # ╟─690b6616-6a62-11eb-2dbf-c9699fc9785f
 # ╟─597b178e-674a-11eb-3a2e-e9a363c00a85
