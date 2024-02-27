@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.17.7
+# v0.19.19
 
 using Markdown
 using InteractiveUtils
@@ -10,6 +10,9 @@ begin
   Pkg.activate(Base.current_project())
 end
 
+# ╔═╡ 85a37427-91c7-49c6-9781-c8038e5b27ec
+Pkg.add(url="https://github.com/UBCECON567/BLPDemand.jl/#master")
+
 # ╔═╡ 9a669df8-6179-11eb-2a04-b9229c951c5a
 using Revise, CodeTracking, BLPDemand, PlutoUI
 
@@ -18,6 +21,9 @@ using Statistics, DataFrames
 
 # ╔═╡ 038e7ae0-6746-11eb-21e0-3d708015b0ea
 using Plots
+
+# ╔═╡ 6bb79d37-0db2-451e-9811-7bc76215390a
+using GLM
 
 # ╔═╡ 32dfd312-6178-11eb-2e72-f5f09e4cc4b6
 md"""
@@ -112,6 +118,9 @@ md"""
 To see the source for functions in `BLPDemand.jl` or any other package, you can use the `CodeTracking` package.
 """
 
+# ╔═╡ da425223-df26-4549-b0b0-52e4017f229a
+PlutoUI.TableOfContents()
+
 # ╔═╡ 65bff59c-61a6-11eb-1dfc-ff3419eb6a0b
 md"""
 The hardest part of simulating the model is solving for equilibrium prices. This is done by `eqprices` function, which uses the approach of [Morrow and Skerlos (2011)](https://doi.org/10.1287/opre.1100.0894).
@@ -141,7 +150,7 @@ begin
 	T = 100 # number of markets
 	β = [-0.1, # price coefficients
 		ones(2)...] # other product coefficients
-	σ = [0.5, ones(length(β)-1)...] # Σ = Diagonal(σ)
+	σ = [0.2, 0.5*ones(length(β)-1)...] # Σ = Diagonal(σ)
 	γ = ones(1) # marginal cost coefficients
 	S = 10 # number of Monte-Carlo draws per market and product to integrate out ν
 	sξ = 0.2 # standard deviation of demand shocks
@@ -173,11 +182,34 @@ sim = simulateBLP(J, T, β, σ, γ, S, varξ=sξ, varω=sω);
 begin
 	using Optim, LineSearches
 	nfxp = []
-	PlutoUI.with_terminal() do
+	#PlutoUI.with_terminal() do
+	let
 		out = estimateBLP(sim.dat, method=:NFXP, verbose=true,
-			  			   optimizer = LBFGS(linesearch=LineSearches.HagerZhang()))
+			  			   optimizer =
+							LBFGS(alphaguess=LineSearches.InitialQuadratic(α0=0.01),
+						   linesearch=LineSearches.BackTracking())
+						#, σ0 = σ, β0 = β, γ0=γ
+		)
 		push!(nfxp, out)
 	end	
+end
+
+# ╔═╡ 48df1e86-6a6f-11eb-1fa4-018317fc7664
+begin
+	using JuMP, Ipopt
+	mpec = []
+	#PlutoUI.with_terminal() do
+	optimizer=optimizer_with_attributes(Ipopt.Optimizer, 
+                             "max_iter" => 200,
+                             "start_with_resto" => "no",
+                             "print_level" => 5)
+							#nlp_scaling_max_gradient = 10.,
+							#least_square_init_primal = "yes"
+		out=estimateBLP(sim.dat, method=:MPEC, verbose=true, 
+						optimizer=optimizer)#,
+						#σ0 = σ , γ0 = γ)#, β0 = β, γ0=γ)
+		push!(mpec, out)
+	#end
 end
 
 # ╔═╡ 06c04b06-6741-11eb-1fb3-effcbc26fbbe
@@ -210,13 +242,20 @@ begin
 				x->x.w,
 				x->x.zd,
 				x->x.zs]
-		df = DataFrame([[f(vcat(t.(d)...)) for t in trans] for f in funcs])
+		df = DataFrame([[f(vcat(t.(d)...)) for t in trans] for f in funcs], :auto)
 		rename!(df, cnames)
 		insertcols!(df, 1,Symbol(" ") => rnames)
 		df
 	end
 	describe(sim.dat)
 end
+
+# ╔═╡ fd3b1dfb-6173-439a-9f75-5c92019d99ea
+md"""
+We can see that the simulated data has a wide range of prices and shares.
+
+It is important for numeric stability that shares be striclty greater than 0 and less than 1. 
+"""
 
 # ╔═╡ 5b80e12a-6748-11eb-0a2c-3d272d21c92a
 let
@@ -225,7 +264,7 @@ let
 	k =1
 	fig=scatter(vcat( (x->x.x[1,j]).(sim.dat)...),
 		vcat( (x->x.s[k]).(sim.dat)...),
-		 ylabel="Share of Product $k", xaxis=:level)
+		 ylabel="Share of Product $k") 
 	plot!(fig, xlabel="Price of Product $j")
 	fig
 end
@@ -239,6 +278,37 @@ let
 		xlabel="ξ[$j]",
 		ylabel="Share of Product $k")
 end
+
+# ╔═╡ 85ff53ba-f625-48e3-9fd2-639776fd9807
+let
+	j = 1
+	k =1
+	scatter(vcat( (x->x.x[1,j]).(sim.dat)...),
+		vcat( (x->x.s[k]).(sim.dat)...),
+		xlabel="ξ[$j]",
+		ylabel="Price of Product $k")
+end
+
+# ╔═╡ 7fb2ca54-201f-4055-8d2a-2d61e70d8532
+md"""
+## First Stage
+
+
+"""
+
+# ╔═╡ 0b3e396f-fac8-4d75-98e7-c8025de93ef4
+let 
+	
+	j = 1
+	s = [x.s[j] for x in sim.dat for j in 1:J]
+	p = [x.x[1,j] for x in sim.dat for j in 1:J]
+	Zd = hcat([x.zd[:,j] for x in sim.dat for j in 1:J]...)'
+	firststage=lm(Zd,p)
+	phat = predict(firststage, Zd)
+	scatter(phat, p, xlabel="p̂",ylabel="p")
+end
+
+
 
 # ╔═╡ e4b9cc8a-6751-11eb-3e0b-01ea772ac1b3
 md"""
@@ -343,11 +413,17 @@ md"""
     We need to compute deriviatives of many of the functions above. $\frac{\partial \sigma}{\partial p}$ is part of the moment conditions. Minimization algorithms can be much more efficient if we provide the gradient and/or hessian of the objective function. Finally, the asymptotic variance of $\theta$ involves the Jacobian of the moment conditions (i.e. $D_\theta g_{jt} (\Delta(s_t;\theta),\theta) $). While we could calculate these derivatives by hand and then write code to compute them, there is a less laborious and error-prone way. Automatic differentiation refers to taking code that computes some function, $f(x)$ and algorithmically applying the chain rule to compute $\frac{df}{dx}$. One of Julia's nicest features is how well it supports automatic differentiation. The two leading Julia packages for automatic differentiation are [ForwardDiff.jl](https://github.com/JuliaDiff/ForwardDiff.jl) and [Zygote.jl](https://github.com/FluxML/Zygote.jl). ForwardDiff.jl is usually a good choice for function from $R^n \to R^k$ with $n$ not too much larger than $k$. Zygote.jl is somewhat more restrictive in what code it is compatible with, but is more efficient if $n$ is much much larger than $k$. You can read more in the [Quantecon notes on automatic differentiation](https://julia.quantecon.org/more_julia/optimization_solver_packages.html).
 """
 
-# ╔═╡ 6dcfe5c0-6c93-11eb-2afb-d7cac4eccc69
-nfxp[1]
+# ╔═╡ 1207e344-0cb6-419b-aa39-f4c2eaca675b
+Pkg.status()
 
-# ╔═╡ 919c3668-6c93-11eb-3326-8db375c7a7ff
-sqrt(eps(Float64)) 
+# ╔═╡ 6dcfe5c0-6c93-11eb-2afb-d7cac4eccc69
+nfxp[1].opt.minimum
+
+# ╔═╡ b29b4c18-dad5-4b39-a201-f6be528a3b09
+nfxp[1].opt.minimizer
+
+# ╔═╡ 687fef13-4a81-4ee4-9679-b4dc92f2938f
+nfxp[1]
 
 # ╔═╡ fd33a886-6a6b-11eb-3e5f-655d4a95cfbf
 md"""
@@ -365,17 +441,11 @@ Note that this problem no longer requires compute $\Delta(s,\theta)$, so there i
 
 """
 
-# ╔═╡ 48df1e86-6a6f-11eb-1fa4-018317fc7664
-begin
-	mpec = []
-	PlutoUI.with_terminal() do
-		out=estimateBLP(sim.dat, method=:MPEC, verbose=true)
-		push!(mpec, out)
-	end
-end
-
 # ╔═╡ 1133f980-6c8d-11eb-18d1-1753b0e2ebce
 mpec[1]
+
+# ╔═╡ c7784995-552f-4f20-8259-71047ef9f71d
+fieldnames(typeof(mpec[1].opt.obj_dict))
 
 # ╔═╡ a578173c-6a6b-11eb-0171-43b29df3bbbb
 
@@ -389,6 +459,7 @@ mpec[1]
 # ╟─106eab00-61a8-11eb-0396-3973ff51f91e
 # ╠═1f12140f-edbf-4522-966e-c8100bb4da26
 # ╠═9a669df8-6179-11eb-2a04-b9229c951c5a
+# ╠═da425223-df26-4549-b0b0-52e4017f229a
 # ╠═4b319506-617b-11eb-3de0-e1f2ba8d083f
 # ╟─65bff59c-61a6-11eb-1dfc-ff3419eb6a0b
 # ╠═8b218732-61a8-11eb-1304-95b305205fc3
@@ -402,19 +473,28 @@ mpec[1]
 # ╟─437777fe-674d-11eb-29a7-4d0f816adef4
 # ╠═0af12182-6743-11eb-3c59-a3cbba8671e5
 # ╠═762289f6-6742-11eb-09cb-19e7a296fe0c
+# ╟─fd3b1dfb-6173-439a-9f75-5c92019d99ea
 # ╠═038e7ae0-6746-11eb-21e0-3d708015b0ea
 # ╠═5b80e12a-6748-11eb-0a2c-3d272d21c92a
 # ╠═f4091954-6745-11eb-1acf-f9878b37d78c
+# ╠═85ff53ba-f625-48e3-9fd2-639776fd9807
+# ╟─7fb2ca54-201f-4055-8d2a-2d61e70d8532
+# ╠═6bb79d37-0db2-451e-9811-7bc76215390a
+# ╠═0b3e396f-fac8-4d75-98e7-c8025de93ef4
 # ╟─e4b9cc8a-6751-11eb-3e0b-01ea772ac1b3
 # ╠═c17cd758-6c83-11eb-1371-c718db546099
 # ╠═9821db60-6c7e-11eb-12e5-5d8473fc46a6
 # ╟─b45bd3c4-6a6e-11eb-0004-3f0ebdec62e0
 # ╟─690b6616-6a62-11eb-2dbf-c9699fc9785f
 # ╟─597b178e-674a-11eb-3a2e-e9a363c00a85
+# ╠═85a37427-91c7-49c6-9781-c8038e5b27ec
+# ╠═1207e344-0cb6-419b-aa39-f4c2eaca675b
 # ╠═01554514-6a67-11eb-2f58-395e4703d401
 # ╠═6dcfe5c0-6c93-11eb-2afb-d7cac4eccc69
-# ╠═919c3668-6c93-11eb-3326-8db375c7a7ff
+# ╠═b29b4c18-dad5-4b39-a201-f6be528a3b09
+# ╠═687fef13-4a81-4ee4-9679-b4dc92f2938f
 # ╟─fd33a886-6a6b-11eb-3e5f-655d4a95cfbf
 # ╠═48df1e86-6a6f-11eb-1fa4-018317fc7664
 # ╠═1133f980-6c8d-11eb-18d1-1753b0e2ebce
+# ╠═c7784995-552f-4f20-8259-71047ef9f71d
 # ╟─a578173c-6a6b-11eb-0171-43b29df3bbbb

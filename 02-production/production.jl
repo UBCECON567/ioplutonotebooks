@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.17.5
+# v0.19.19
 
 using Markdown
 using InteractiveUtils
@@ -104,6 +104,22 @@ Paul Schrimpf
 [Creative Commons Attribution-ShareAlike 4.0 International License](http://creativecommons.org/licenses/by-sa/4.0/)
 """
 
+# ╔═╡ dc247c6f-52fb-47ef-bd54-2c5a20cfe791
+x = 2
+
+# ╔═╡ 8a4ade3b-eb29-4762-b32e-34adb96c9773
+z = 2
+
+# ╔═╡ 16bfc249-ff90-45ea-a707-e96d59b30d84
+x+z
+
+# ╔═╡ 3ad05053-18cd-4e0a-92b3-0ced08d9a1f0
+begin
+	a = 1
+	b = 2
+	a + b 
+end
+
 # ╔═╡ 1641e5b8-2a1f-4a37-85f1-84c4bab78932
 PlutoUI.TableOfContents()
 
@@ -195,6 +211,12 @@ The code below simulates the model. We assume that $\epsilon$ and $\eta$ are nor
 
 """
 
+# ╔═╡ 55bc0887-d01d-4174-bb77-45e18989bffc
+
+
+# ╔═╡ 90a815d7-f0fd-455c-a0b0-42eee3d91f6a
+
+
 # ╔═╡ 8d1cfa5c-56a7-11eb-339e-3d733e6041ce
 N, T = 1000, 10
 
@@ -215,8 +237,8 @@ If there is no variation in prices, $k_{it+1}$ and $\ell_{it}$ are perfectly col
 wage = rand(N,T) .+ 0.5;
 
 # ╔═╡ d7d9043e-56b4-11eb-05af-1f838362a37d
-rent = ones(N,T);
-#rent = rand(N,T) .+ 0.5;
+#rent = ones(N,T);
+rent = rand(N,T) .+ 0.5;
 
 # ╔═╡ 2d7f4818-5837-11eb-3679-dfaad86cd792
 md"""
@@ -230,7 +252,7 @@ Prices known: $(@bind pricesknown CheckBox())
 
 # ╔═╡ b821a380-5687-11eb-0f31-89930c22a2ff
 y, l, k, ω = Production.simulate(p, N, T, wage=wage, rent=rent,
-								 pricesknown=pricesknown, inertia = inertia);
+								 pricesknown=pricesknown, inertia = inertia)
 
 # ╔═╡ 0482c232-56ad-11eb-3e62-d5482fd641e1
 Plots.gr(fmt="png") # need a bitmap format when plotting thousands of points or your browser will not be happy
@@ -385,6 +407,10 @@ md"""
 
 # ╔═╡ Cell order:
 # ╟─fa80b794-569d-11eb-2f16-0dad9fa54602
+# ╠═dc247c6f-52fb-47ef-bd54-2c5a20cfe791
+# ╠═8a4ade3b-eb29-4762-b32e-34adb96c9773
+# ╠═16bfc249-ff90-45ea-a707-e96d59b30d84
+# ╠═3ad05053-18cd-4e0a-92b3-0ced08d9a1f0
 # ╠═d315f0e2-5754-11eb-2240-dd868564adfb
 # ╠═2a662708-d5f0-41be-bc2e-56e00e2c975d
 # ╠═1641e5b8-2a1f-4a37-85f1-84c4bab78932
@@ -392,6 +418,8 @@ md"""
 # ╟─68f6e53e-56d4-11eb-3575-05ee3be38745
 # ╟─4be9eee0-56dd-11eb-3458-e3ad0d5c1a78
 # ╠═41769c24-567b-11eb-2f2d-9b51f92e7947
+# ╠═55bc0887-d01d-4174-bb77-45e18989bffc
+# ╠═90a815d7-f0fd-455c-a0b0-42eee3d91f6a
 # ╠═8d1cfa5c-56a7-11eb-339e-3d733e6041ce
 # ╠═a16f916a-5687-11eb-0219-7b16fa743194
 # ╠═0437683c-5837-11eb-1f1c-33755302a653
