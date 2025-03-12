@@ -1,17 +1,19 @@
 ### A Pluto.jl notebook ###
-# v0.19.19
+# v0.20.4
 
 using Markdown
 using InteractiveUtils
 
 # This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
 macro bind(def, element)
+    #! format: off
     quote
         local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
         local el = $(esc(element))
         global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
         el
     end
+    #! format: on
 end
 
 # ╔═╡ d315f0e2-5754-11eb-2240-dd868564adfb
@@ -108,7 +110,9 @@ Paul Schrimpf
 x = 2
 
 # ╔═╡ 8a4ade3b-eb29-4762-b32e-34adb96c9773
-z = 2
+begin
+	z = 3
+	end
 
 # ╔═╡ 16bfc249-ff90-45ea-a707-e96d59b30d84
 x+z
@@ -122,6 +126,11 @@ end
 
 # ╔═╡ 1641e5b8-2a1f-4a37-85f1-84c4bab78932
 PlutoUI.TableOfContents()
+
+# ╔═╡ 6af067bf-71f2-49d9-a4a4-86c941e82e73
+md"""
+Hi
+"""
 
 # ╔═╡ 7d3e92a0-569d-11eb-3d2b-bdbfb6b4b364
 md"""
@@ -222,6 +231,12 @@ N, T = 1000, 10
 
 # ╔═╡ a16f916a-5687-11eb-0219-7b16fa743194
 p = Production.Params(0.6,  0.3, 0.5, 0.1, 0.1)
+
+# ╔═╡ 6b62cbea-331f-408d-8b4c-841828b5aa13
+
+
+# ╔═╡ 6fa08bca-fac0-4e23-9001-8524dc1037da
+
 
 # ╔═╡ b5eeabfe-56dd-11eb-0292-43f1e2166311
 md"""
@@ -414,6 +429,7 @@ md"""
 # ╠═d315f0e2-5754-11eb-2240-dd868564adfb
 # ╠═2a662708-d5f0-41be-bc2e-56e00e2c975d
 # ╠═1641e5b8-2a1f-4a37-85f1-84c4bab78932
+# ╟─6af067bf-71f2-49d9-a4a4-86c941e82e73
 # ╟─7d3e92a0-569d-11eb-3d2b-bdbfb6b4b364
 # ╟─68f6e53e-56d4-11eb-3575-05ee3be38745
 # ╟─4be9eee0-56dd-11eb-3458-e3ad0d5c1a78
@@ -422,6 +438,8 @@ md"""
 # ╠═90a815d7-f0fd-455c-a0b0-42eee3d91f6a
 # ╠═8d1cfa5c-56a7-11eb-339e-3d733e6041ce
 # ╠═a16f916a-5687-11eb-0219-7b16fa743194
+# ╠═6b62cbea-331f-408d-8b4c-841828b5aa13
+# ╠═6fa08bca-fac0-4e23-9001-8524dc1037da
 # ╠═0437683c-5837-11eb-1f1c-33755302a653
 # ╟─b5eeabfe-56dd-11eb-0292-43f1e2166311
 # ╠═da42b1c0-56b4-11eb-2a47-531922e9e6d4
